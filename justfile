@@ -4,20 +4,24 @@ set dotenv-load
 default:
   @just --list
 
-# build all VM images into result/
+# build the bootstrap VM image into result/
 build:
-  nix build .#vm-images --out-link result
+  nix build .#bootstrap-image --out-link result
 
-# build the home VM image into result-home/
-build-home:
-  nix build .#home --out-link result-home
+# generate terraform variables from inventory.nix
+tfvars:
+  nix eval --json .#terraform.vars > terraform/generated.auto.tfvars.json
+
+# switch a host to its nixosConfiguration using inventory metadata
+switch host:
+  nh os switch --elevation-strategy passwordless --target-host $(nix eval --raw .#inventory.{{host}}.ipv4.address) .#{{host}}
 
 # plan terraform changes after building images
 [working-directory: 'terraform']
-plan: build
+plan: build tfvars
   tofu plan
 
 # apply terraform changes after building images
 [working-directory: 'terraform']
-apply: build
+apply: build tfvars
   tofu apply

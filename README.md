@@ -1,7 +1,15 @@
 # jort.haus
 
 jort.haus is the latest iteration (v8 by my counts) of my homelab. it is nixos
-vms running in proxmox, configured through terraform.
+vms running in proxmox, configured through opentofu.
 
-this repo is early in dev while i get things set up. will update with more
-relevant info once its more setup
+deployable host metadata is defined in [`inventory.nix`](./inventory.nix).
+
+## docs
+
+repository documentation lives in [`docs/`](./docs).
+
+start with:
+
+- [`docs/README.md`](./docs/README.md)
+- [`docs/disk-images.md`](./docs/disk-images.md)

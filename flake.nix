@@ -11,60 +11,87 @@
       let
         lib = nixpkgs.lib;
         image-system = "x86_64-linux";
-        inventory-options = {
-          inherit inputs;
+        inventory = import ./inventory.nix;
+        commonModule = host: {
+          _module.args = {
+            inherit inputs inventory host;
+          };
+          networking.hostName = lib.mkDefault host.hostName;
         };
-        inventory-entries = builtins.attrNames (builtins.readDir ./inventory);
-        inventory-configurations = builtins.listToAttrs
-          (builtins.map (node:
-            let
-              base-module = import ./inventory/${node};
-              module = {
-                # NOTE: unconditionally set x86 linux here. i dont imagine
-                # wanting arm linux here, but the assumption is set here.
-                system = image-system;
-                modules = [
-                  {
-                    _module.args = inventory-options;
-                  }
-
-                  ./modules/guest
-                  ./modules/homelab
-                  ./modules/system
-
-                  base-module
-                ];
-              };
-            in
+        shared-modules = [
+          ./modules/guest
+          ./modules/homelab
+          ./modules/system
+        ];
+        mkConfiguration = host:
+          lib.nixosSystem {
+            system = image-system;
+            modules = [
+              (commonModule host)
+            ] ++ shared-modules ++ host.modules;
+          };
+        inventory-configurations = lib.mapAttrs (_: mkConfiguration) inventory;
+        bootstrap-configuration = lib.nixosSystem {
+          system = image-system;
+          modules = [
             {
-              name = lib.removeSuffix ".nix" node;
-              value = lib.nixosSystem module;
-            }) inventory-entries);
+              _module.args = {
+                inherit inputs inventory;
+                host = {
+                  hostName = "bootstrap";
+                };
+              };
+            }
+            ./modules/guest
+            ./modules/homelab
+            ./modules/system
+            ./modules/hosts/bootstrap.nix
+          ];
+        };
+        imageTargetKey = host: "${host.proxmox.nodeName}/${host.proxmox.imageDatastore}";
+        terraform-hosts = lib.mapAttrs
+          (_: host: {
+            hostName = host.hostName;
+            ipv4 = host.ipv4;
+            imageTargetKey = imageTargetKey host;
+            proxmox = host.proxmox;
+          })
+          inventory;
+        terraform-image-targets = lib.listToAttrs (
+          lib.map
+            (host:
+              lib.nameValuePair (imageTargetKey host) {
+                nodeName = host.proxmox.nodeName;
+                imageDatastore = host.proxmox.imageDatastore;
+              }
+            )
+            (builtins.attrValues inventory)
+        );
         image-pkgs = import nixpkgs { system = image-system; };
-        vm-image-packages = lib.mapAttrs'
-          (name: config:
-            lib.nameValuePair name (image-pkgs.runCommand "${name}-vm-image" { } ''
-              set -euo pipefail
-              mkdir -p "$out"
+        bootstrap-image = image-pkgs.runCommand "bootstrap-image" { } ''
+          set -euo pipefail
+          mkdir -p "$out"
 
-              image_file="$(find ${config.config.system.build.images.qemu-efi} -maxdepth 1 -type f -name '*.qcow2' | head -n 1)"
-              if [ -z "$image_file" ]; then
-                echo "could not find qemu-efi image for ${name}" >&2
-                exit 1
-              fi
+          image_file="$(find ${bootstrap-configuration.config.system.build.images.qemu-efi} -maxdepth 1 -type f -name '*.qcow2' | head -n 1)"
+          if [ -z "$image_file" ]; then
+            echo "could not find qemu-efi image for bootstrap" >&2
+            exit 1
+          fi
 
-              ln -s "$image_file" "$out/${name}.qcow2"
-            '')
-          ) inventory-configurations;
+          ln -s "$image_file" "$out/bootstrap.qcow2"
+        '';
       in
       {
+        inherit inventory;
         nixosConfigurations = inventory-configurations;
-        packages.${image-system} = vm-image-packages // {
-          vm-images = image-pkgs.linkFarm "vm-images"
-            (lib.mapAttrsToList (name: package: {
-              name = "${name}.qcow2";
-              path = "${package}/${name}.qcow2";
-            }) vm-image-packages);
+        packages.${image-system}.bootstrap-image = bootstrap-image;
+        terraform = {
+          hosts = terraform-hosts;
+          imageTargets = terraform-image-targets;
+          vars = {
+            hosts = terraform-hosts;
+            imageTargets = terraform-image-targets;
+          };
         };
       } // flake-utils.lib.eachDefaultSystem (system:
         let

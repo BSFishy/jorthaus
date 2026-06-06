@@ -1,196 +1,332 @@
 # Disk images
 
-This document describes how VM disk images are built in this repository, which Nix image variant is used, how those images are imported into Proxmox, and the rationale behind the current setup.
+This document describes how VM bootstrap images are built in this repository, how they are used with OpenTofu and Proxmox, and how that ties into the intended long-term management workflow.
 
-## Overview
+## Intended workflow
 
-This repository uses:
+The goal of this repository is:
 
-- **Nix** to define NixOS systems and build reproducible VM disk images
-- **OpenTofu** to upload and deploy those images as VMs in Proxmox
-- **Proxmox cloud-init integration** to provide first-boot configuration such as networking and other initialization data
+1. use OpenTofu to provision a VM in Proxmox from a generic NixOS bootstrap image
+2. ensure that VM is reachable over SSH at a predictable address
+3. manage the VM after provisioning with `nh os switch --target-host ...` against a host-specific NixOS configuration
 
-The image build and deploy flow is:
+That means image builds are primarily for **initial provisioning**, not for day-2 configuration changes.
 
-1. Define a NixOS host in `inventory/`
-2. Build a VM image from that host definition with `nix build`
-3. Produce a stable, predictable image filename such as `result/home.qcow2`
-4. Upload that image to Proxmox with OpenTofu
-5. Create a VM that imports the image and applies Proxmox-side settings such as CPU, memory, disk attachment, networking, and cloud-init initialization
+In practice, the workflow is intended to be:
+
+```bash
+just apply
+just switch home
+```
+
+After the VM exists, most normal changes should be applied with `nh os switch` rather than by rebuilding and reimporting the VM image.
+
+## Current image strategy
+
+This repository builds a single generic bootstrap image:
+
+- flake package: `packages.x86_64-linux.bootstrap-image`
+- build output file: `bootstrap.qcow2`
+
+The image is built from the `bootstrap` inventory entry and wrapped to expose a stable output path.
+
+Example build:
+
+```bash
+nix build .#bootstrap-image --out-link result
+```
+
+Result:
+
+```text
+result/bootstrap.qcow2
+```
+
+## Why a single bootstrap image
+
+The repository previously built per-host images. That approach works, but it makes ongoing changes feel more image-centric than necessary.
+
+The current design uses a single bootstrap image because it better matches the intended lifecycle:
+
+- OpenTofu provisions the VM once
+- the VM becomes reachable over SSH
+- host-specific configuration is applied with `nh os switch`
+
+This keeps the provisioning image generic while allowing each actual machine to be fully defined in `inventory.nix` and exposed through `nixosConfigurations`.
 
 ## Current image variant
 
-The repository currently builds the **`qemu-efi`** image variant.
+The bootstrap image uses the NixOS **`qemu-efi`** image variant.
 
-This is exposed in `flake.nix` through:
+This was chosen because it is a good fit for Proxmox VM disk import workflows:
 
-- `packages.x86_64-linux.<hostname>` for per-host images
-- `packages.x86_64-linux.vm-images` for all VM images together
+- it produces a qcow2 disk image
+- qcow2 is smaller than raw in typical cases
+- it works well with Proxmox `import` uploads
+- it avoids the Proxmox backup/archive workflow used by `.vma.zst` images
 
-The built image is wrapped so that each host gets a stable name:
+## Why not the `proxmox` image variant
 
-- `home` -> `home.qcow2`
+The NixOS `proxmox` image variant produces a Proxmox-specific backup artifact such as `.vma.zst`.
 
-That stable naming is intentional so that OpenTofu can reference a consistent path such as `../result/home.qcow2` instead of a generated store filename.
+That is useful for backup/restore-style workflows, but this repository uses OpenTofu resources that import a disk image into a VM definition.
 
-## Why `qemu-efi`
+Because of that, a generic qcow2 disk image is the better fit here.
 
-The original approach used the NixOS `proxmox` image variant, which produces a Proxmox backup archive such as `.vma.zst`.
+## Build and inventory configuration locations
 
-That format is useful for Proxmox-native backup/restore workflows, but it is not the best fit for the OpenTofu resource flow used in this repository.
+The shared deployable host inventory lives in:
 
-### Why not the `proxmox` variant
+- `inventory.nix`
 
-The `proxmox` image variant produces a Proxmox backup artifact:
-
-- VMA archive
-- compressed as `.vma.zst`
-- includes Proxmox-specific restore metadata
-
-That is a good fit for restore-style workflows, but this repo uses OpenTofu resources that work better with a **VM disk image import** flow.
-
-In practice, the `qemu-efi` variant is a better match because it gives us a general-purpose disk image that Proxmox can import as a VM disk.
-
-### Why not raw images
-
-A raw image would also work, but `qemu-efi` defaults to **qcow2**, which is typically much smaller than raw for mostly-empty guest disks.
-
-That makes `qemu-efi` a better default here because it offers:
-
-- smaller build artifacts
-- less data to upload to Proxmox
-- a cleaner fit for image import workflows
-
-## EFI and machine choices
-
-The current Terraform VM definition uses:
-
-- `machine = "q35"`
-- `bios = "ovmf"`
-
-This matches the EFI-capable image produced by `qemu-efi`.
-
-The intent is to keep the VM configuration modern and explicit:
-
-- **OVMF** for UEFI firmware
-- **q35** for a modern machine type
-
-## Guest-side settings required for Proxmox
-
-Although the image variant is `qemu-efi`, the guest itself is configured to behave like a Proxmox-friendly imported VM.
-
-Those guest-side settings live in:
+The generic guest image behavior is configured in:
 
 - `modules/system/default.nix`
 
-That module includes the following important behavior.
+The bootstrap-only host module lives in:
 
-### Bootloader
+- `modules/hosts/bootstrap.nix`
 
-- GRUB is disabled with `lib.mkForce false`
-- `systemd-boot` is enabled
+The deployable host modules live in:
 
-This matches the EFI-oriented image layout.
+- `modules/hosts/`
 
-### Cloud-init inside the guest
+The flake wiring that exposes `bootstrap-image`, `inventory`, `terraform.vars`, and `nixosConfigurations` lives in:
+
+- `flake.nix`
+
+## What the bootstrap image contains
+
+The bootstrap image is intentionally generic, but it includes the baseline features needed for Proxmox provisioning and later remote management.
+
+### Boot setup
+
+The image is configured for EFI boot:
+
+- GRUB disabled
+- `systemd-boot` enabled
+- intended for Proxmox with `bios = "ovmf"`
+- intended for modern machine type `q35`
+
+### Cloud-init support
 
 The guest enables cloud-init:
 
 - `services.cloud-init.enable = true`
 - `services.cloud-init.network.enable = true`
 
-This is important because the OpenTofu `initialization` block relies on Proxmox cloud-init behavior. Without cloud-init enabled in the guest, the Proxmox-side initialization settings would not be applied as intended.
+Cloud-init is used here primarily for first-boot network configuration provided by Terraform.
 
-### Networking ownership
-
-The guest sets:
-
-- `networking.hostName = ""`
-- `networking.useDHCP = false`
-
-The intent is for cloud-init to control first-boot networking and related initialization instead of the image hard-coding those values ahead of time.
-
-### QEMU guest support
+### QEMU / Proxmox guest support
 
 The guest enables:
 
 - `services.qemuGuest.enable = true`
+- serial console via `boot.kernelParams = [ "console=ttyS0" ]`
 
-This improves Proxmox integration and guest management.
-
-### Console behavior
-
-The guest sets:
-
-- `boot.kernelParams = [ "console=ttyS0" ]`
-
-This aligns the guest with the serial console setup used by Proxmox.
+This keeps the guest aligned with the Proxmox VM configuration used in Terraform.
 
 ### Filesystem layout and growth
 
-The guest expects:
+The image expects:
 
-- root filesystem at `/dev/disk/by-label/nixos`
-- EFI system partition at `/dev/disk/by-label/ESP`
+- root filesystem labeled `nixos`
+- EFI system partition labeled `ESP`
 
-It also enables automatic root partition growth:
+It also allows the root partition and filesystem to grow when the VM disk is larger than the original image size.
 
-- `boot.growPartition = true`
-- root filesystem uses `autoResize = true`
+### SSH access
 
-This allows the imported image to start small while still growing cleanly when the Proxmox VM disk is sized larger.
+The image contains a built-in administrative user:
 
-## Build outputs
+- username: `matt`
 
-The flake wraps the raw NixOS image output to expose stable filenames.
+That user:
 
-### Per-host build
+- is a normal user
+- is in the `wheel` group
+- has passwordless sudo via wheel
+- has the repository-managed SSH public key installed as an authorized key
 
-Build a single host image:
+This is what allows the VM to be reached over SSH immediately after provisioning without requiring a cloud-init user definition.
+
+## Where the SSH username and public key are defined
+
+The SSH bootstrap identity is intentionally committed to the repository.
+
+### Username
+
+The bootstrap username is defined in:
+
+- `modules/system/default.nix`
+
+Current value:
+
+- `matt`
+
+### Public key
+
+The authorized SSH public key is also defined in:
+
+- `modules/system/default.nix`
+
+It is installed for the `matt` user in `users.users.matt.openssh.authorizedKeys.keys`.
+
+## Host inventory and host modules
+
+Deployable hosts are defined in the root inventory attrset:
+
+- `inventory.nix`
+
+Each attribute name is the host name, and each host definition contains things such as:
+
+- hostname
+- IP information
+- Proxmox VM settings
+- host-specific NixOS modules
+
+For example, the current deployable host is:
+
+- `home`
+
+Host-specific NixOS modules live in:
+
+- `modules/hosts/`
+
+The bootstrap image is intentionally **not** part of the deployable host inventory. It is referenced directly by the flake so that `inventory.nix` remains focused on actual deployed machines.
+
+The long-term desired configuration for `home` is exposed as `nixosConfigurations.home` and is intended to be applied with:
 
 ```bash
-nix build .#home --out-link result-home
+nh os switch --target-host matt@10.1.4.10 .#home
 ```
 
-Result:
+## How Terraform uses the bootstrap image
 
-```text
-result-home/home.qcow2
-```
+The current VM template is in:
 
-### All-host build
+- `terraform/home.tf`
 
-Build all defined VM images:
+Terraform uploads:
+
+- `../result/bootstrap.qcow2`
+
+using:
+
+- `proxmox_virtual_environment_file`
+- `content_type = "import"`
+
+Terraform host data is generated from the flake inventory output into:
+
+- `terraform/generated.auto.tfvars.json`
+
+That generated file is produced from:
+
+- `nix eval --json .#terraform.vars`
+
+and is used by the generic Terraform resources defined in `terraform/home.tf`.
+
+The bootstrap image upload is not duplicated per VM. Instead, Terraform groups hosts by Proxmox image upload target and uploads the bootstrap image once per unique:
+
+- Proxmox node
+- image datastore
+
+The VMs then reference the uploaded bootstrap image for their corresponding target.
+
+## Proxmox-side settings in Terraform
+
+Terraform owns the Proxmox VM definition, including things such as:
+
+- VM name
+- target node
+- machine type
+- firmware type
+- CPU and memory
+- disk placement and disk interface
+- network bridge and NIC model
+- first-boot cloud-init network configuration
+
+It also manages bootstrap image uploads per unique image target rather than per individual VM.
+
+## Static addressing
+
+The current VM is provisioned with a static address in the `10.1.0.0/16` network.
+
+Current `home` values are defined in:
+
+- `inventory.nix`
+
+Current settings:
+
+- address: `10.1.4.10/16`
+- gateway: `10.1.0.1`
+
+The intended convention is to count upward within the `10.1.4.x` range as more VMs are added.
+
+## Why cloud-init does not define the SSH user
+
+The SSH user and authorized key are already present in the bootstrap image itself.
+
+Because of that, Terraform cloud-init does **not** need to create the user or inject SSH keys for normal bootstrap access.
+
+Cloud-init remains enabled because it is still useful for first-boot network configuration and other metadata-driven initialization if needed later.
+
+## Ongoing management model
+
+After a VM is created from the bootstrap image, the preferred management path is:
 
 ```bash
-nix build .#vm-images --out-link result
+just switch home
 ```
 
-Result:
+which expands to an `nh os switch` call using the management IP from `inventory.nix`.
 
-```text
-result/home.qcow2
-```
+That means:
+
+- OpenTofu provisions infrastructure
+- NixOS host configurations manage the guest long-term
+
+Rebuilding and reimporting the bootstrap image should generally only be necessary when changing the generic bootstrap image itself.
 
 ## Just recipes
 
-The common workflows are exposed in `justfile`.
+The common entry points are exposed through `justfile`.
 
-### Build images
+### Build the bootstrap image
 
 ```bash
 just build
 ```
 
-Builds all VM images into `result/`.
-
-### Build a single host image
+This runs:
 
 ```bash
-just build-home
+nix build .#bootstrap-image --out-link result
 ```
 
-Builds the `home` image into `result-home/`.
+### Generate Terraform variables from inventory
+
+```bash
+just tfvars
+```
+
+This writes:
+
+- `terraform/generated.auto.tfvars.json`
+
+from:
+
+```bash
+nix eval --json .#terraform.vars
+```
+
+### Switch a deployed host
+
+```bash
+just switch home
+```
+
+This resolves the target host IP from `inventory.nix` and runs `nh os switch` against `.#home`.
 
 ### Plan and apply
 
@@ -199,80 +335,10 @@ just plan
 just apply
 ```
 
-These depend on `build`, so they rebuild the current image set before running OpenTofu from the `terraform/` directory.
-
-## How OpenTofu uses the image
-
-The current Terraform VM definition lives in:
-
-- `terraform/home.tf`
-
-The image upload uses `proxmox_virtual_environment_file` with:
-
-- `content_type = "import"`
-- `source_file.path = "../result/home.qcow2"`
-
-That means Proxmox treats the uploaded file as an importable VM disk image rather than as a backup archive.
-
-The VM then attaches that uploaded image as its primary disk.
-
-## Proxmox-side settings in Terraform
-
-The VM resource currently defines Proxmox-side behavior such as:
-
-- CPU cores and CPU type
-- memory
-- machine type
-- firmware type
-- serial console device
-- disk bus and disk options
-- network bridge and NIC model
-- cloud-init initialization settings
-
-This split is intentional:
-
-- **Nix** defines the guest OS and image behavior
-- **OpenTofu** defines the Proxmox VM that consumes that image
-
-## Cloud-init rationale
-
-The `initialization` block in Terraform is the Proxmox-side interface for cloud-init-driven first-boot configuration.
-
-This lets the VM image stay fairly generic while still allowing deployment-time settings such as:
-
-- DHCP or static IP configuration
-- user/account initialization
-- custom cloud-init user-data, meta-data, vendor-data, or network-data later if needed
-
-That is preferable to baking deployment-specific details directly into the image.
-
-## Current tradeoffs
-
-The current design favors:
-
-- reproducible image builds with Nix
-- stable file names for deployment automation
-- smaller import artifacts via qcow2
-- a clean separation between guest image configuration and Proxmox VM configuration
-
-Tradeoffs include:
-
-- the image is no longer a Proxmox-native `.vma.zst` backup artifact
-- some Proxmox-specific defaults that came from the NixOS `proxmox` image module are now maintained explicitly in this repo
-
-That tradeoff is considered worthwhile because it better matches the OpenTofu import workflow used here.
+These build the current bootstrap image, generate Terraform variables from inventory, and then run OpenTofu from the `terraform/` directory.
 
 ## Operational notes
 
-- The Proxmox datastore used for the upload must support the `import` content type.
-- The VM firmware and machine type should remain aligned with the image layout. Since this repo currently builds `qemu-efi`, the VM should continue using UEFI-compatible settings unless the image strategy changes.
-- If the image format, firmware mode, bootloader, or import strategy changes, this document should be updated as part of the same change.
-
-## Future directions
-
-Potential future improvements include:
-
-- parameterizing image builds per host or per role
-- documenting additional host images as more inventory entries are added
-- adding more operational documentation for deployment, rollback, and troubleshooting
-- generating more of the Terraform-side configuration from shared host metadata
+- The Proxmox datastore used for the uploaded image must support the `import` content type.
+- The Proxmox VM settings should remain aligned with the image strategy. Since the image is `qemu-efi`, the VM should continue using UEFI-compatible settings unless the image strategy changes.
+- If the bootstrap username, SSH key, inventory schema, static addressing convention, or provisioning workflow changes, this document should be updated in the same change.

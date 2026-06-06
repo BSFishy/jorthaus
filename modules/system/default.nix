@@ -1,5 +1,8 @@
 { lib, ... }:
 
+let
+  mattAuthorizedKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGOo7iBDgCXP99GA4NStJudsWkZQVaA9iDqDo6IQF2ve";
+in
 {
   system.stateVersion = "26.05";
 
@@ -11,8 +14,7 @@
   boot.loader.grub.enable = lib.mkForce false;
   boot.loader.systemd-boot.enable = lib.mkDefault true;
 
-  # Cloud-init should own first-boot networking and hostname configuration.
-  networking.hostName = lib.mkForce "";
+  # Cloud-init owns first-boot networking. Hostnames come from inventory.
   networking.useDHCP = lib.mkForce false;
 
   # Match the serial console expectations used by Proxmox.
@@ -25,6 +27,14 @@
 
   services.qemuGuest.enable = lib.mkDefault true;
   services.sshd.enable = lib.mkDefault true;
+
+  users.users.matt = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" ];
+    openssh.authorizedKeys.keys = [ mattAuthorizedKey ];
+  };
+
+  security.sudo.wheelNeedsPassword = false;
 
   fileSystems."/" = lib.mkDefault {
     device = "/dev/disk/by-label/nixos";
