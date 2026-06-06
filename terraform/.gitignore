@@ -1,4 +1,3 @@
-/ssh-keys
 .terraform.lock.hcl
 .terraform
 *.tfstate

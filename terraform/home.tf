@@ -28,6 +28,13 @@ resource "proxmox_virtual_environment_vm" "home" {
     size         = 20
   }
 
+  agent {
+    enabled = true
+    timeout = "15m"
+    trim    = false
+    type    = "virtio"
+  }
+
   initialization {
     datastore_id = "local-lvm"
     interface    = "ide2"
@@ -37,6 +44,10 @@ resource "proxmox_virtual_environment_vm" "home" {
         address = "dhcp"
       }
     }
+  }
+
+  operating_system {
+    type = "l26"
   }
 
   network_device {

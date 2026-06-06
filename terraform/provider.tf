@@ -7,8 +7,4 @@ terraform {
   }
 }
 
-provider "proxmox" {
-  ssh {
-    agent = true
-  }
-}
+provider "proxmox" {}
