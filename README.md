@@ -13,3 +13,4 @@ start with:
 
 - [`docs/README.md`](./docs/README.md)
 - [`docs/disk-images.md`](./docs/disk-images.md)
+- [`docs/environment.md`](./docs/environment.md)

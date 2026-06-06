@@ -13,6 +13,7 @@ Use the docs in this directory to understand:
 ## Current docs
 
 - [`disk-images.md`](./disk-images.md) — how VM disk images are built with Nix, which image variant is used, and how those images are consumed by OpenTofu and Proxmox
+- [`environment.md`](./environment.md) — repository-side environment configuration and external Proxmox/network assumptions required by the current setup
 
 ## Expectations
 

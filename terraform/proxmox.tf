@@ -2,20 +2,20 @@ variable "hosts" {
   type = map(object({
     hostName = string
     ipv4 = object({
-      address = string
+      address      = string
       prefixLength = number
-      gateway = string
+      gateway      = string
     })
     imageTargetKey = string
     proxmox = object({
-      nodeName = string
-      cpuCores = number
-      memory = number
-      diskSize = number
-      machine = string
-      bios = string
-      bridge = string
-      imageDatastore = string
+      nodeName        = string
+      cpuCores        = number
+      memory          = number
+      diskSize        = number
+      machine         = string
+      bios            = string
+      bridge          = string
+      imageDatastore  = string
       vmDiskDatastore = string
     })
   }))
@@ -23,7 +23,7 @@ variable "hosts" {
 
 variable "imageTargets" {
   type = map(object({
-    nodeName = string
+    nodeName       = string
     imageDatastore = string
   }))
 }
