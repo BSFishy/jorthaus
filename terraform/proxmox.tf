@@ -63,6 +63,11 @@ resource "proxmox_virtual_environment_vm" "host" {
     device = "socket"
   }
 
+  efi_disk {
+    datastore_id = each.value.proxmox.vmDiskDatastore
+    type         = "4m"
+  }
+
   disk {
     datastore_id = each.value.proxmox.vmDiskDatastore
     file_id      = proxmox_virtual_environment_file.bootstrap_disk_image[each.value.imageTargetKey].id
