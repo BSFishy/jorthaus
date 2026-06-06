@@ -1,9 +1,13 @@
-{ lib, ... }:
+{ lib, modulesPath, ... }:
 
 let
   mattAuthorizedKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGOo7iBDgCXP99GA4NStJudsWkZQVaA9iDqDo6IQF2ve";
 in
 {
+  imports = [
+    (modulesPath + "/profiles/qemu-guest.nix")
+  ];
+
   system.stateVersion = "26.05";
 
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
@@ -19,6 +23,7 @@ in
 
   # Match the serial console expectations used by Proxmox.
   boot.kernelParams = [ "console=ttyS0" ];
+  boot.growPartition = lib.mkDefault true;
 
   services.cloud-init = {
     enable = true;

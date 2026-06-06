@@ -19,7 +19,6 @@
           networking.hostName = lib.mkDefault host.hostName;
         };
         shared-modules = [
-          ./modules/guest
           ./modules/homelab
           ./modules/system
         ];
@@ -42,7 +41,6 @@
                 };
               };
             }
-            ./modules/guest
             ./modules/homelab
             ./modules/system
             ./modules/hosts/bootstrap.nix
