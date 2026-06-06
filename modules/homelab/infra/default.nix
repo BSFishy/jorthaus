@@ -1,0 +1,7 @@
+_:
+
+{
+  imports = [
+    ./traefik.nix
+  ];
+}
