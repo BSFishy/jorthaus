@@ -12,6 +12,10 @@ build:
 tfvars:
   nix eval --json .#terraform.vars > terraform/generated.auto.tfvars.json
 
+# create or edit an agenix-managed secret file
+secret-edit name:
+  agenix -e secrets/{{name}}.age -i "$HOME/.ssh/id_ed25519"
+
 # switch a host to its nixosConfiguration using inventory metadata
 switch host:
   nh os switch --elevation-strategy passwordless --target-host $(nix eval --raw .#inventory.{{host}}.ipv4.address) .#{{host}}

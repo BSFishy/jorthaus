@@ -25,6 +25,9 @@ in
   boot.kernelParams = [ "console=ttyS0" ];
   boot.growPartition = lib.mkDefault true;
 
+  # Use the host SSH key for agenix secret decryption on deployed machines.
+  age.identityPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+
   services.cloud-init = {
     enable = true;
     network.enable = true;

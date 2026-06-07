@@ -4,6 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    agenix.url = "github:ryantm/agenix";
   };
 
   outputs =
@@ -19,6 +20,7 @@
           networking.hostName = lib.mkDefault host.hostName;
         };
         shared-modules = [
+          inputs.agenix.nixosModules.default
           ./modules/homelab
           ./modules/system
         ];
@@ -41,6 +43,7 @@
                 };
               };
             }
+            inputs.agenix.nixosModules.default
             ./modules/homelab
             ./modules/system
             ./modules/hosts/bootstrap.nix
@@ -100,6 +103,7 @@
             buildInputs = [
               pkgs.opentofu
               pkgs.just
+              inputs.agenix.packages.${system}.default
             ];
           };
         });
