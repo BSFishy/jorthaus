@@ -149,8 +149,8 @@ These are assumptions about how VMs should be attached and booted in the Proxmox
 
 The current deployed host inventory assumes a network layout with:
 
-- host IP: `10.1.4.10`
-- prefix length: `/16`
+- `home`: `10.1.4.10/16`
+- `infra`: `10.1.4.11/16`
 - gateway: `10.1.0.1`
 
 Defined in:
@@ -188,9 +188,9 @@ This is implied by:
 - `.env`
 - `.envrc`
 
-## Current hardware layout assumptions for `home`
+## Current hardware layout assumptions for deployable hosts
 
-The current `home` VM assumes:
+The current VMs assume:
 
 - CPU cores: `2`
 - memory: `2048` MiB
@@ -206,6 +206,11 @@ These values are defined by:
 
 - `inventory.nix`
 - `terraform/proxmox.tf`
+
+The current deployable hosts are:
+
+- `home`
+- `infra`
 
 ## Why this distinction matters
 

@@ -15,3 +15,4 @@ start with:
 - [`docs/disk-images.md`](./docs/disk-images.md)
 - [`docs/environment.md`](./docs/environment.md)
 - [`docs/agenix.md`](./docs/agenix.md)
+- [`docs/routing-and-dns.md`](./docs/routing-and-dns.md)

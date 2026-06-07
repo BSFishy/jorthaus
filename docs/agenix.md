@@ -67,10 +67,11 @@ For Traefik, the current repository uses a single environment file secret:
 
 - `secrets/cloudflare-token.env.age`
 
-The decrypted file contents should look like:
+The encrypted secret should contain the Cloudflare environment variables directly, for example:
 
 ```text
 CF_DNS_API_TOKEN=...
+CF_ZONE_API_TOKEN=...
 ```
 
 ### Is the Cloudflare account ID needed?
@@ -97,11 +98,11 @@ The Traefik module now supports:
 homelab.traefik.cloudflareCredentialsFile = config.age.secrets.cloudflare-token-env.path;
 ```
 
-When set, the file is added to:
+When set, the decrypted agenix file is added directly to:
 
 - `services.traefik.environmentFiles`
 
-so Traefik can consume the Cloudflare credentials from the decrypted environment file.
+so Traefik can consume the Cloudflare credentials from that decrypted environment file.
 
 If both `cloudflareCredentialsFile` and `acmeEmail` are set, the Traefik module also wires:
 
@@ -174,6 +175,7 @@ and put in contents like:
 
 ```text
 CF_DNS_API_TOKEN=...
+CF_ZONE_API_TOKEN=...
 ```
 
 ### 5. Set the ACME registration email

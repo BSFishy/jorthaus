@@ -28,7 +28,7 @@ This repository builds a single generic bootstrap image:
 - flake package: `packages.x86_64-linux.bootstrap-image`
 - build output file: `bootstrap.qcow2`
 
-The image is built from the `bootstrap` inventory entry and wrapped to expose a stable output path.
+The image is built from the bootstrap-specific module path wired directly in `flake.nix` and wrapped to expose a stable output path.
 
 Example build:
 
@@ -185,9 +185,10 @@ Each attribute name is the host name, and each host definition contains things s
 - Proxmox VM settings
 - host-specific NixOS modules
 
-For example, the current deployable host is:
+The current deployable hosts are:
 
 - `home`
+- `infra`
 
 Host-specific NixOS modules live in:
 
@@ -195,17 +196,22 @@ Host-specific NixOS modules live in:
 
 The bootstrap image is intentionally **not** part of the deployable host inventory. It is referenced directly by the flake so that `inventory.nix` remains focused on actual deployed machines.
 
-The long-term desired configuration for `home` is exposed as `nixosConfigurations.home` and is intended to be applied with:
+The long-term desired configuration for each host is exposed through `nixosConfigurations`, for example:
+
+- `nixosConfigurations.home`
+- `nixosConfigurations.infra`
+
+A normal host update is intended to be applied with:
 
 ```bash
-nh os switch --target-host matt@10.1.4.10 .#home
+just switch home
 ```
 
 ## How Terraform uses the bootstrap image
 
 The current VM template is in:
 
-- `terraform/home.tf`
+- `terraform/proxmox.tf`
 
 Terraform uploads:
 
@@ -224,7 +230,7 @@ That generated file is produced from:
 
 - `nix eval --json .#terraform.vars`
 
-and is used by the generic Terraform resources defined in `terraform/home.tf`.
+and is used by the generic Terraform resources defined in `terraform/proxmox.tf`.
 
 The bootstrap image upload is not duplicated per VM. Instead, Terraform groups hosts by Proxmox image upload target and uploads the bootstrap image once per unique:
 
@@ -252,13 +258,14 @@ It also manages bootstrap image uploads per unique image target rather than per 
 
 The current VM is provisioned with a static address in the `10.1.0.0/16` network.
 
-Current `home` values are defined in:
+Current values are defined in:
 
 - `inventory.nix`
 
-Current settings:
+Current settings include:
 
-- address: `10.1.4.10/16`
+- `home`: `10.1.4.10/16`
+- `infra`: `10.1.4.11/16`
 - gateway: `10.1.0.1`
 
 The intended convention is to count upward within the `10.1.4.x` range as more VMs are added.

@@ -15,6 +15,7 @@ Use the docs in this directory to understand:
 - [`disk-images.md`](./disk-images.md) — how VM disk images are built with Nix, which image variant is used, and how those images are consumed by OpenTofu and Proxmox
 - [`environment.md`](./environment.md) — repository-side environment configuration and external Proxmox/network assumptions required by the current setup
 - [`agenix.md`](./agenix.md) — how agenix is integrated into the repo for encrypted secrets such as Cloudflare credentials
+- [`routing-and-dns.md`](./routing-and-dns.md) — current DNS/routing behavior and the intended split-horizon design
 
 ## Expectations
 
