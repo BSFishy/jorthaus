@@ -16,6 +16,7 @@ Use the docs in this directory to understand:
 - [`environment.md`](./environment.md) — repository-side environment configuration and external Proxmox/network assumptions required by the current setup
 - [`agenix.md`](./agenix.md) — how agenix is integrated into the repo for encrypted secrets such as Cloudflare credentials
 - [`routing-and-dns.md`](./routing-and-dns.md) — current DNS/routing behavior and the intended split-horizon design
+- [`services.md`](./services.md) — current application services enabled on each host and how they are exposed
 
 ## Expectations
 
