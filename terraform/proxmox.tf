@@ -17,6 +17,11 @@ variable "hosts" {
       bridge          = string
       imageDatastore  = string
       vmDiskDatastore = string
+      usb = list(object({
+        host    = optional(string)
+        mapping = optional(string)
+        usb3    = optional(bool)
+      }))
     })
   }))
 }
@@ -104,5 +109,15 @@ resource "proxmox_virtual_environment_vm" "host" {
   network_device {
     bridge = each.value.proxmox.bridge
     model  = "virtio"
+  }
+
+  dynamic "usb" {
+    for_each = each.value.proxmox.usb
+
+    content {
+      host    = try(usb.value.host, null)
+      mapping = try(usb.value.mapping, null)
+      usb3    = try(usb.value.usb3, null)
+    }
   }
 }

@@ -212,6 +212,38 @@ The current deployable hosts are:
 - `home`
 - `infra`
 
+### Optional USB passthrough
+
+Per-host Proxmox USB passthrough can now be declared in:
+
+- `inventory.nix` under `proxmox.usb`
+- consumed by `terraform/proxmox.tf`
+
+The current shape is a list of objects such as:
+
+```nix
+usb = [
+  {
+    host = "1a86:55d4";
+    usb3 = true;
+  }
+];
+```
+
+or, if Proxmox resource mappings are preferred:
+
+```nix
+usb = [
+  {
+    mapping = "zigbee-coordinator";
+    usb3 = true;
+  }
+];
+```
+
+This is intended for devices such as a Zigbee coordinator attached to the `home` VM.
+The exact `host` vendor/product ID or `mapping` name is environment-specific and must be discovered from the Proxmox side before enabling passthrough.
+
 ## Why this distinction matters
 
 When rebuilding from scratch, failures often come from confusing repository configuration with environmental assumptions.

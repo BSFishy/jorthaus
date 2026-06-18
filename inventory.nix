@@ -18,6 +18,7 @@
       bridge = "vmbr0";
       imageDatastore = "local";
       vmDiskDatastore = "local-lvm";
+      usb = [ ];
     };
 
     modules = [
@@ -44,6 +45,7 @@
       bridge = "vmbr0";
       imageDatastore = "local";
       vmDiskDatastore = "local-lvm";
+      usb = [ ];
     };
 
     modules = [

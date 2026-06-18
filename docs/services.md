@@ -18,6 +18,12 @@ The `home` host currently runs:
   - exposure: LAN-only MQTT broker on the `home` host
   - current auth model: anonymous access is enabled
 
+- Zigbee2MQTT
+  - module: `modules/homelab/home/zigbee2mqtt.nix`
+  - MQTT backend: `mqtt://127.0.0.1:1883` via local Mosquitto
+  - default serial device: `/dev/ttyACM0`
+  - current expectation: the Zigbee coordinator is passed through from Proxmox to the `home` VM as a USB device
+
 ## Infra host
 
 The `infra` host currently runs:
@@ -31,4 +37,6 @@ The `infra` host currently runs:
 
 - Only HTTP/HTTPS services that should be reverse proxied are registered in `homelab.services.*`.
 - Mosquitto is not registered there because MQTT is not routed through the current Traefik setup.
+- Zigbee2MQTT is also internal-only and is not registered in `homelab.services.*`.
 - If Mosquitto later needs authenticated users, secrets should be managed through agenix rather than committing credentials in the repo.
+- For Zigbee coordinators, prefer a stable guest device path such as `/dev/serial/by-id/...` once the Proxmox passthrough device is identified.

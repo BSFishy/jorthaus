@@ -250,6 +250,7 @@ Terraform owns the Proxmox VM definition, including things such as:
 - CPU and memory
 - disk placement and disk interface
 - network bridge and NIC model
+- optional USB passthrough devices declared per host in `inventory.nix`
 - first-boot cloud-init network configuration
 
 It also manages bootstrap image uploads per unique image target rather than per individual VM.
