@@ -38,5 +38,6 @@
   imports = [
     ./home
     ./infra
+    ./media
   ];
 }

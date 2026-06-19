@@ -151,6 +151,7 @@ The current deployed host inventory assumes a network layout with:
 
 - `home`: `10.1.4.10/16`
 - `infra`: `10.1.4.11/16`
+- `media`: `10.1.4.12/16`
 - gateway: `10.1.0.1`
 
 Defined in:
@@ -211,6 +212,7 @@ The current deployable hosts are:
 
 - `home`
 - `infra`
+- `media`
 
 ### Optional USB passthrough
 

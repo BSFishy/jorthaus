@@ -189,6 +189,7 @@ The current deployable hosts are:
 
 - `home`
 - `infra`
+- `media`
 
 Host-specific NixOS modules live in:
 
@@ -200,6 +201,7 @@ The long-term desired configuration for each host is exposed through `nixosConfi
 
 - `nixosConfigurations.home`
 - `nixosConfigurations.infra`
+- `nixosConfigurations.media`
 
 A normal host update is intended to be applied with:
 
@@ -267,6 +269,7 @@ Current settings include:
 
 - `home`: `10.1.4.10/16`
 - `infra`: `10.1.4.11/16`
+- `media`: `10.1.4.12/16`
 - gateway: `10.1.0.1`
 
 The intended convention is to count upward within the `10.1.4.x` range as more VMs are added.

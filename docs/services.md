@@ -33,6 +33,16 @@ The `infra` host currently runs:
   - listen ports: `80`, `443`
   - role: reverse proxy and TLS termination for HTTP/HTTPS homelab services
 
+## Media host
+
+The `media` host currently runs:
+
+- Jellyfin
+  - module: `modules/homelab/media/jellyfin.nix`
+  - listen port: `8096`
+  - external hostname: `jellyfin.jort.haus`
+  - exposed through Traefik on `infra`
+
 ## Notes
 
 - Only HTTP/HTTPS services that should be reverse proxied are registered in `homelab.services.*`.

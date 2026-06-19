@@ -28,6 +28,7 @@ Current deployable hosts from `inventory.nix`:
 
 - `home` → `10.1.4.10`
 - `infra` → `10.1.4.11`
+- `media` → `10.1.4.12`
 
 Current network assumptions:
 
@@ -56,15 +57,18 @@ The infra host firewall is opened for:
 - TCP 80
 - TCP 443
 
-## Current service route
+## Current service routes
 
-The currently declared routed service is Home Assistant.
+The currently declared routed services are Home Assistant and Jellyfin.
 
 Defined in:
 
 - `modules/homelab/home/home-assistant.nix`
+- `modules/homelab/media/jellyfin.nix`
 
 Current route data:
+
+### Home Assistant
 
 - hostname: `hass.jort.haus`
 - backend host: `home`
@@ -72,10 +76,20 @@ Current route data:
 - backend port: `8123`
 - backend scheme: `http`
 
+### Jellyfin
+
+- hostname: `jellyfin.jort.haus`
+- backend host: `media`
+- backend IP: `10.1.4.12`
+- backend port: `8096`
+- backend scheme: `http`
+
 Traefik uses this to generate:
 
 - a hostname-based router for `hass.jort.haus`
 - a backend pointing to `http://10.1.4.10:8123`
+- a hostname-based router for `jellyfin.jort.haus`
+- a backend pointing to `http://10.1.4.12:8096`
 
 ## Current local DNS setup
 
@@ -100,6 +114,7 @@ That means the current local DNS model is:
 For example:
 
 - `hass.jort.haus` → `10.1.4.11`
+- `jellyfin.jort.haus` → `10.1.4.11`
 
 This wildcard local DNS setup means additional routed services under `*.jort.haus` do not need separate local DNS records as long as they should terminate at the same Traefik host.
 
@@ -146,6 +161,7 @@ Served by the local network / UniFi side.
 Examples:
 
 - `hass.jort.haus` → `10.1.4.11`
+- `jellyfin.jort.haus` → `10.1.4.11`
 
 Internal clients should hit Traefik directly over the LAN.
 
@@ -162,6 +178,7 @@ The current plan is:
 Examples:
 
 - `hass.jort.haus` → public WAN IP in Cloudflare DNS
+- `jellyfin.jort.haus` → public WAN IP in Cloudflare DNS
 
 External clients should reach the service through Cloudflare rather than connecting directly to the raw public IP endpoint.
 
