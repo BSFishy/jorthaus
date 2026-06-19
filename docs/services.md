@@ -43,6 +43,7 @@ The `media` host currently runs:
   - external hostname: `jellyfin.jort.haus`
   - exposed through Traefik on `infra`
   - hardware acceleration: VA-API via `/dev/dri/renderD128`
+  - transcoding behavior: throttling enabled when playback is buffered ahead
   - firmware requirement: redistributable firmware enabled in NixOS for AMD GPU blobs
   - current Proxmox expectation: PCI passthrough using the `amd-igpu` resource mapping as `hostpci0`
 

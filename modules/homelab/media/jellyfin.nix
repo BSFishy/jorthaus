@@ -50,6 +50,7 @@ in
 
       transcoding = {
         enableHardwareEncoding = true;
+        throttleTranscoding = true;
         hardwareDecodingCodecs = {
           h264 = true;
           hevc = true;
