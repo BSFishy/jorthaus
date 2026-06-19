@@ -22,6 +22,16 @@ variable "hosts" {
         mapping = optional(string)
         usb3    = optional(bool)
       }))
+      hostpci = list(object({
+        device  = string
+        id      = optional(string)
+        mapping = optional(string)
+        mdev    = optional(string)
+        pcie    = optional(bool)
+        rom_file = optional(string)
+        rombar  = optional(bool)
+        xvga    = optional(bool)
+      }))
     })
   }))
 }
@@ -118,6 +128,21 @@ resource "proxmox_virtual_environment_vm" "host" {
       host    = try(usb.value.host, null)
       mapping = try(usb.value.mapping, null)
       usb3    = try(usb.value.usb3, null)
+    }
+  }
+
+  dynamic "hostpci" {
+    for_each = each.value.proxmox.hostpci
+
+    content {
+      device   = hostpci.value.device
+      id       = try(hostpci.value.id, null)
+      mapping  = try(hostpci.value.mapping, null)
+      mdev     = try(hostpci.value.mdev, null)
+      pcie     = try(hostpci.value.pcie, null)
+      rom_file = try(hostpci.value.rom_file, null)
+      rombar   = try(hostpci.value.rombar, null)
+      xvga     = try(hostpci.value.xvga, null)
     }
   }
 }

@@ -19,6 +19,7 @@
       imageDatastore = "local";
       vmDiskDatastore = "local-lvm";
       usb = [ ];
+      hostpci = [ ];
     };
 
     modules = [
@@ -46,6 +47,7 @@
       imageDatastore = "local";
       vmDiskDatastore = "local-lvm";
       usb = [ ];
+      hostpci = [ ];
     };
 
     modules = [
@@ -73,6 +75,14 @@
       imageDatastore = "local";
       vmDiskDatastore = "local-lvm";
       usb = [ ];
+      hostpci = [
+        {
+          device = "hostpci0";
+          mapping = "amd-igpu";
+          pcie = true;
+          rombar = true;
+        }
+      ];
     };
 
     modules = [

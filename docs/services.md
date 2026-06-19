@@ -42,6 +42,9 @@ The `media` host currently runs:
   - listen port: `8096`
   - external hostname: `jellyfin.jort.haus`
   - exposed through Traefik on `infra`
+  - hardware acceleration: VA-API via `/dev/dri/renderD128`
+  - firmware requirement: redistributable firmware enabled in NixOS for AMD GPU blobs
+  - current Proxmox expectation: PCI passthrough using the `amd-igpu` resource mapping as `hostpci0`
 
 ## Notes
 
@@ -50,3 +53,4 @@ The `media` host currently runs:
 - Zigbee2MQTT is also internal-only and is not registered in `homelab.services.*`.
 - If Mosquitto later needs authenticated users, secrets should be managed through agenix rather than committing credentials in the repo.
 - For Zigbee coordinators, prefer a stable guest device path such as `/dev/serial/by-id/...` once the Proxmox passthrough device is identified.
+- For Jellyfin GPU acceleration, the guest configuration assumes a render node at `/dev/dri/renderD128`; the Proxmox side must make the AMD iGPU available to the VM.

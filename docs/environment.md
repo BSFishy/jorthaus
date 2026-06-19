@@ -246,6 +246,45 @@ usb = [
 This is intended for devices such as a Zigbee coordinator attached to the `home` VM.
 The exact `host` vendor/product ID or `mapping` name is environment-specific and must be discovered from the Proxmox side before enabling passthrough.
 
+### Optional PCI passthrough
+
+Per-host Proxmox PCI passthrough can now be declared in:
+
+- `inventory.nix` under `proxmox.hostpci`
+- consumed by `terraform/proxmox.tf`
+
+The current shape is a list of objects such as:
+
+```nix
+hostpci = [
+  {
+    device = "hostpci0";
+    mapping = "amd-igpu";
+    pcie = true;
+  }
+];
+```
+
+This is intended for devices such as the AMD iGPU passed through to the `media` VM for Jellyfin transcoding.
+Using a Proxmox resource mapping is the preferred repository-side abstraction when the same guest may need equivalent hardware on different physical nodes.
+The exact mapping definition must exist in Proxmox on the relevant nodes before Terraform apply succeeds.
+
+Current repository expectation for the `media` VM:
+
+- mapping name: `amd-igpu`
+- guest slot name: `hostpci0`
+- PCIe enabled: yes
+- ROM BAR enabled: yes
+
+Current known Proxmox-side device on `gaia-05`:
+
+- `0000:c5:00.0` — AMD Phoenix1 iGPU
+
+For the current Jellyfin setup, map the VGA function rather than enabling mediated-device mode.
+The repository is currently configured for full PCI passthrough of the GPU function to the guest, not mediated/vGPU-style sharing.
+On additional Proxmox nodes, create the same `amd-igpu` mapping name and point it at that node's local AMD iGPU PCI address.
+The guest configuration also expects `hardware.enableRedistributableFirmware = true` so the AMDGPU firmware blobs are available inside NixOS.
+
 ## Why this distinction matters
 
 When rebuilding from scratch, failures often come from confusing repository configuration with environmental assumptions.
