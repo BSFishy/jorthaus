@@ -20,6 +20,7 @@
       vmDiskDatastore = "local-lvm";
       usb = [ ];
       hostpci = [ ];
+      dataDisks = [ ];
     };
 
     modules = [
@@ -48,6 +49,7 @@
       vmDiskDatastore = "local-lvm";
       usb = [ ];
       hostpci = [ ];
+      dataDisks = [ ];
     };
 
     modules = [
@@ -81,6 +83,19 @@
           mapping = "amd-igpu";
           pcie = true;
           rombar = true;
+        }
+      ];
+      dataDisks = [
+        {
+          interface = "virtio1";
+          datastoreId = "media";
+          size = 800;
+          serial = "media";
+          cache = "none";
+          backup = false;
+          replicate = false;
+          discard = "on";
+          iothread = true;
         }
       ];
     };

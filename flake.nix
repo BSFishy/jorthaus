@@ -5,6 +5,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     agenix.url = "github:ryantm/agenix";
+    disko.url = "github:nix-community/disko";
   };
 
   outputs =
@@ -21,6 +22,7 @@
         };
         shared-modules = [
           inputs.agenix.nixosModules.default
+          inputs.disko.nixosModules.disko
           ./modules/homelab
           ./modules/system
         ];
@@ -44,6 +46,7 @@
               };
             }
             inputs.agenix.nixosModules.default
+            inputs.disko.nixosModules.disko
             ./modules/homelab
             ./modules/system
             ./modules/hosts/bootstrap.nix

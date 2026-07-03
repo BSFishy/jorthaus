@@ -47,6 +47,15 @@ The `media` host currently runs:
   - firmware requirement: redistributable firmware enabled in NixOS for AMD GPU blobs
   - current Proxmox expectation: PCI passthrough using the `amd-igpu` resource mapping as `hostpci0`
 
+- Media storage
+  - module: `modules/homelab/media/storage.nix`
+  - backend: additional Proxmox VM disk on the Ceph RBD-backed `media` datastore
+  - guest device target: `/dev/disk/by-id/virtio-media`
+  - partitioning: GPT with one XFS partition
+  - filesystem label: `media`
+  - mount point: `/srv/media`
+  - backup policy: Proxmox backup disabled for this disk because the media payload is reproducible
+
 ## Notes
 
 - Only HTTP/HTTPS services that should be reverse proxied are registered in `homelab.services.*`.

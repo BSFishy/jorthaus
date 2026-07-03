@@ -285,6 +285,35 @@ The repository is currently configured for full PCI passthrough of the GPU funct
 On additional Proxmox nodes, create the same `amd-igpu` mapping name and point it at that node's local AMD iGPU PCI address.
 The guest configuration also expects `hardware.enableRedistributableFirmware = true` so the AMDGPU firmware blobs are available inside NixOS.
 
+### Optional additional VM data disks
+
+Per-host additional VM disks can now be declared in:
+
+- `inventory.nix` under `proxmox.dataDisks`
+- consumed by `terraform/proxmox.tf`
+
+The current shape is a list of objects such as:
+
+```nix
+dataDisks = [
+  {
+    interface = "virtio1";
+    datastoreId = "media";
+    size = 800;
+    serial = "media";
+    cache = "none";
+    backup = false;
+    replicate = false;
+    discard = "on";
+    iothread = true;
+  }
+];
+```
+
+This is intended for guest-visible data volumes such as the `media` VM's Ceph RBD-backed Jellyfin library disk.
+`datastoreId` is the Proxmox storage identifier, which may itself be backed by a Ceph pool.
+For the current `media` host, the additional disk is expected to appear in the guest as `/dev/disk/by-id/virtio-media` and is declaratively partitioned and mounted by the host configuration.
+
 ## Why this distinction matters
 
 When rebuilding from scratch, failures often come from confusing repository configuration with environmental assumptions.

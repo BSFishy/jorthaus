@@ -251,6 +251,7 @@ Terraform owns the Proxmox VM definition, including things such as:
 - firmware type
 - CPU and memory
 - disk placement and disk interface
+- optional additional VM data disks declared per host in `inventory.nix`
 - network bridge and NIC model
 - optional USB passthrough devices declared per host in `inventory.nix`
 - optional PCI passthrough devices declared per host in `inventory.nix`

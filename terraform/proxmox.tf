@@ -23,14 +23,26 @@ variable "hosts" {
         usb3    = optional(bool)
       }))
       hostpci = list(object({
-        device  = string
-        id      = optional(string)
-        mapping = optional(string)
-        mdev    = optional(string)
-        pcie    = optional(bool)
+        device   = string
+        id       = optional(string)
+        mapping  = optional(string)
+        mdev     = optional(string)
+        pcie     = optional(bool)
         rom_file = optional(string)
-        rombar  = optional(bool)
-        xvga    = optional(bool)
+        rombar   = optional(bool)
+        xvga     = optional(bool)
+      }))
+      dataDisks = list(object({
+        interface   = string
+        datastoreId = string
+        size        = number
+        serial      = optional(string)
+        cache       = optional(string)
+        backup      = optional(bool)
+        replicate   = optional(bool)
+        discard     = optional(string)
+        iothread    = optional(bool)
+        ssd         = optional(bool)
       }))
     })
   }))
@@ -91,6 +103,23 @@ resource "proxmox_virtual_environment_vm" "host" {
     iothread     = true
     discard      = "on"
     size         = each.value.proxmox.diskSize
+  }
+
+  dynamic "disk" {
+    for_each = each.value.proxmox.dataDisks
+
+    content {
+      datastore_id = disk.value.datastoreId
+      interface    = disk.value.interface
+      size         = disk.value.size
+      serial       = try(disk.value.serial, null)
+      cache        = try(disk.value.cache, null)
+      backup       = try(disk.value.backup, null)
+      replicate    = try(disk.value.replicate, null)
+      discard      = try(disk.value.discard, null)
+      iothread     = try(disk.value.iothread, null)
+      ssd          = try(disk.value.ssd, null)
+    }
   }
 
   agent {
