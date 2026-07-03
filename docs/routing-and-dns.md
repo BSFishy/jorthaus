@@ -118,6 +118,20 @@ Current record:
 That means the current local DNS model is:
 
 - UniFi provides internal DNS answers
+
+## Current router port forwarding
+
+Router port forwarding is also partially managed through the UniFi provider in Terraform.
+
+Defined in:
+
+- `terraform/dns.tf`
+
+Current managed forward:
+
+- public TCP `443` → `infra` `10.1.4.11:443`
+
+This makes the `infra` Traefik host the current HTTPS ingress target managed by OpenTofu.
 - all subdomains under `jort.haus` resolve locally to the internal Traefik host
 - internal clients connect directly to Traefik on `infra`
 - traffic stays on the LAN and does not need to leave via the public internet

@@ -24,6 +24,7 @@
         "default_config"
         "esphome"
         "met"
+        "mobile_app"
         "mqtt"
         "light"
         "sensor"
@@ -39,6 +40,17 @@
       ];
 
       config = {
+        # Home Assistant stores UI-managed automations, scripts, and scenes in
+        # these files under /var/lib/hass. Include them so UI-created items are
+        # actually loaded after save/reload.
+        automation = "!include automations.yaml";
+        script = "!include scripts.yaml";
+        scene = "!include scenes.yaml";
+
+        # The mobile app integration needs the component to be loaded, not just
+        # present in the package, so enable it explicitly in HA config.
+        mobile_app = { };
+
         http = {
           server_port = 8123;
           use_x_forwarded_for = true;

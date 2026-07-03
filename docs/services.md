@@ -11,6 +11,9 @@ The `home` host currently runs:
   - listen port: `8123`
   - external hostname: `hass.jort.haus`
   - exposed through Traefik on `infra`
+  - enabled integrations in repo include MQTT support and the Home Assistant mobile app integration
+  - the mobile app integration is also explicitly enabled in Home Assistant config via `mobile_app: {}` so app registration endpoints are active
+  - UI-managed automations, scripts, and scenes are loaded from `automations.yaml`, `scripts.yaml`, and `scenes.yaml`
 
 - Mosquitto
   - module: `modules/homelab/home/mosquitto.nix`
