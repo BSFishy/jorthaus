@@ -18,7 +18,11 @@
       bridge = "vmbr0";
       imageDatastore = "local";
       vmDiskDatastore = "local-lvm";
-      usb = [ ];
+      usb = [
+        {
+          mapping = "zigbee-coordinator";
+        }
+      ];
       hostpci = [ ];
       dataDisks = [ ];
     };

@@ -23,6 +23,10 @@ in
         {
           port = cfg.mosquitto.port;
           omitPasswordAuth = true;
+          # The NixOS Mosquitto module always wires an acl_file per listener.
+          # An empty ACL file effectively blocks publish/subscribe, even when
+          # anonymous auth is allowed, so grant full local/LAN access here.
+          acl = [ "topic readwrite #" ];
           settings.allow_anonymous = true;
         }
       ];

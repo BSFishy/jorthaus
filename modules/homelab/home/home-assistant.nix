@@ -18,6 +18,25 @@
     services.home-assistant = {
       enable = config.homelab.home-assistant.enable;
       openFirewall = true;
+      extraComponents = [
+        # Keep NixOS' usual extra integrations and add the MQTT discovery
+        # entity domains Zigbee2MQTT publishes.
+        "default_config"
+        "esphome"
+        "met"
+        "mqtt"
+        "light"
+        "sensor"
+        "number"
+        "select"
+        "text"
+        "update"
+      ];
+      extraPackages = ps: with ps; [
+        paho-mqtt
+        pymetno
+        gtts
+      ];
 
       config = {
         http = {

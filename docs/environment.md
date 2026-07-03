@@ -246,6 +246,12 @@ usb = [
 This is intended for devices such as a Zigbee coordinator attached to the `home` VM.
 The exact `host` vendor/product ID or `mapping` name is environment-specific and must be discovered from the Proxmox side before enabling passthrough.
 
+Current repository expectation for the `home` VM:
+
+- USB mapping name: `zigbee-coordinator`
+- guest service consumer: Zigbee2MQTT
+- configured guest serial path: `/dev/serial/by-id/usb-ITead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_fc390a86e549ef118fc7cd8cff00cc63-if00-port0`
+
 ### Optional PCI passthrough
 
 Per-host Proxmox PCI passthrough can now be declared in:

@@ -21,8 +21,11 @@ The `home` host currently runs:
 - Zigbee2MQTT
   - module: `modules/homelab/home/zigbee2mqtt.nix`
   - MQTT backend: `mqtt://127.0.0.1:1883` via local Mosquitto
-  - default serial device: `/dev/ttyACM0`
-  - current expectation: the Zigbee coordinator is passed through from Proxmox to the `home` VM as a USB device
+  - configured serial device: `/dev/serial/by-id/usb-ITead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_fc390a86e549ef118fc7cd8cff00cc63-if00-port0`
+  - frontend port: `8080`
+  - external hostname: `zigbee.jort.haus`
+  - exposed through Traefik on `infra`
+  - current Proxmox expectation: USB passthrough using the `zigbee-coordinator` resource mapping
 
 ## Infra host
 
@@ -60,7 +63,7 @@ The `media` host currently runs:
 
 - Only HTTP/HTTPS services that should be reverse proxied are registered in `homelab.services.*`.
 - Mosquitto is not registered there because MQTT is not routed through the current Traefik setup.
-- Zigbee2MQTT is also internal-only and is not registered in `homelab.services.*`.
+- Zigbee2MQTT is registered in `homelab.services.*` because its frontend is exposed through Traefik.
 - If Mosquitto later needs authenticated users, secrets should be managed through agenix rather than committing credentials in the repo.
 - For Zigbee coordinators, prefer a stable guest device path such as `/dev/serial/by-id/...` once the Proxmox passthrough device is identified.
 - For Jellyfin GPU acceleration, the guest configuration assumes a render node at `/dev/dri/renderD128`; the Proxmox side must make the AMD iGPU available to the VM.

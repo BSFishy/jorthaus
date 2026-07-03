@@ -59,11 +59,12 @@ The infra host firewall is opened for:
 
 ## Current service routes
 
-The currently declared routed services are Home Assistant and Jellyfin.
+The currently declared routed services are Home Assistant, Jellyfin, and Zigbee2MQTT.
 
 Defined in:
 
 - `modules/homelab/home/home-assistant.nix`
+- `modules/homelab/home/zigbee2mqtt.nix`
 - `modules/homelab/media/jellyfin.nix`
 
 Current route data:
@@ -84,12 +85,22 @@ Current route data:
 - backend port: `8096`
 - backend scheme: `http`
 
+### Zigbee2MQTT
+
+- hostname: `zigbee.jort.haus`
+- backend host: `home`
+- backend IP: `10.1.4.10`
+- backend port: `8080`
+- backend scheme: `http`
+
 Traefik uses this to generate:
 
 - a hostname-based router for `hass.jort.haus`
 - a backend pointing to `http://10.1.4.10:8123`
 - a hostname-based router for `jellyfin.jort.haus`
 - a backend pointing to `http://10.1.4.12:8096`
+- a hostname-based router for `zigbee.jort.haus`
+- a backend pointing to `http://10.1.4.10:8080`
 
 ## Current local DNS setup
 
@@ -115,6 +126,7 @@ For example:
 
 - `hass.jort.haus` → `10.1.4.11`
 - `jellyfin.jort.haus` → `10.1.4.11`
+- `zigbee.jort.haus` → `10.1.4.11`
 
 This wildcard local DNS setup means additional routed services under `*.jort.haus` do not need separate local DNS records as long as they should terminate at the same Traefik host.
 
@@ -162,6 +174,7 @@ Examples:
 
 - `hass.jort.haus` → `10.1.4.11`
 - `jellyfin.jort.haus` → `10.1.4.11`
+- `zigbee.jort.haus` → `10.1.4.11`
 
 Internal clients should hit Traefik directly over the LAN.
 
@@ -179,6 +192,7 @@ Examples:
 
 - `hass.jort.haus` → public WAN IP in Cloudflare DNS
 - `jellyfin.jort.haus` → public WAN IP in Cloudflare DNS
+- `zigbee.jort.haus` → public WAN IP in Cloudflare DNS
 
 External clients should reach the service through Cloudflare rather than connecting directly to the raw public IP endpoint.
 
