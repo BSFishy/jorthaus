@@ -110,6 +110,17 @@ Defined in:
 
 This means the current Proxmox environment must have a node with that exact name.
 
+### Proxmox management IP scheme
+
+Current evidence in the repo suggests Proxmox physical nodes use the `10.1.1.20x` management IP scheme.
+
+Currently referenced example:
+
+- `gaia-05` API endpoint: `10.1.1.202`
+
+This is separate from the VM guest network in `10.1.4.x`.
+When adding additional physical Proxmox nodes, prefer assigning them from the same `10.1.1.20x` management range unless the environment design changes.
+
 ## Proxmox storage layout
 
 Current inventory expects these storages to exist:
