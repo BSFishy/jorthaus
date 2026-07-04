@@ -61,6 +61,9 @@ The `media` host currently runs:
   - filesystem label: `media`
   - mount point: `/srv/media`
   - backup policy: Proxmox backup disabled for this disk because the media payload is reproducible
+  - operational note: the `/srv/media` mount is `nofail` so a freshly recreated VM can boot before the blank disk is initialized
+  - host helper: `/run/current-system/sw/bin/media-storage-init` formats the configured media disk if needed, creates `/srv/media`, and then starts the systemd mount unit
+  - initialization workflow after recreating `media` with a fresh blank data disk: run `just switch media`, then `just media-storage-init`
 
 ## Notes
 

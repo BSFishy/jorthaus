@@ -20,6 +20,12 @@ secret-edit name:
 switch host:
   nh os switch --elevation-strategy passwordless --target-host $(nix eval --raw .#inventory.{{host}}.ipv4.address) .#{{host}}
 
+# initialize and mount the media data disk on the media host after recreating
+# the VM or attaching a fresh blank disk. The host configuration installs a
+# stable wrapper at /run/current-system/sw/bin/media-storage-init.
+media-storage-init:
+  ssh matt@$(nix eval --raw .#inventory.media.ipv4.address) "sudo /run/current-system/sw/bin/media-storage-init"
+
 # plan terraform changes after building images
 [working-directory: 'terraform']
 plan: build tfvars

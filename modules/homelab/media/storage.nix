@@ -1,7 +1,15 @@
-{ config, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.homelab;
+  mediaStorageInit = pkgs.writeShellScriptBin "media-storage-init" ''
+    set -euo pipefail
+
+    ${config.system.build.formatScript}
+    mkdir -p ${lib.escapeShellArg cfg.media-storage.mountPoint}
+    mount_unit=$(systemd-escape --path --suffix=mount ${lib.escapeShellArg cfg.media-storage.mountPoint})
+    systemctl start "$mount_unit"
+  '';
 in
 {
   options.homelab.media-storage = {
@@ -47,6 +55,14 @@ in
     fileSystems.${cfg.media-storage.mountPoint} = {
       device = lib.mkForce "/dev/disk/by-label/${cfg.media-storage.fsLabel}";
       fsType = "xfs";
+      options = [
+        # Allow the host to boot and switch cleanly before the data disk has
+        # been initialized on a freshly recreated VM.
+        "nofail"
+        "x-systemd.device-timeout=5s"
+      ];
     };
+
+    environment.systemPackages = [ mediaStorageInit ];
   };
 }
