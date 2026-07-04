@@ -41,11 +41,16 @@ in
       serverConfig = {
         BitTorrent.Session = {
           DefaultSavePath = "${qbt.downloadDir}/complete";
+          Interface = "wg0";
+          InterfaceName = "wg0";
           TempPath = "${qbt.downloadDir}/incomplete";
           TempPathEnabled = true;
         };
         LegalNotice.Accepted = true;
         Preferences = {
+          General = {
+            StatusbarExternalIPDisplayed = true;
+          };
           WebUI = {
             Address = "*";
             LocalHostAuth = false;

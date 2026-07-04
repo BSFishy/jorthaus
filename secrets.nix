@@ -9,4 +9,6 @@ in
 {
   "secrets/cloudflare-token.env.age".publicKeys = [ matt infra ];
   "secrets/pia-media.env.age".publicKeys = [ matt media ];
+  "secrets/recyclarr-sonarr-api-key.age".publicKeys = [ matt media ];
+  "secrets/recyclarr-radarr-api-key.age".publicKeys = [ matt media ];
 }

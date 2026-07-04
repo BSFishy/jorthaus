@@ -6,6 +6,7 @@ The current intended use is to manage secrets such as:
 
 - Cloudflare API credentials for Traefik DNS challenge usage
 - PIA VPN credentials for the `media` host
+- Recyclarr API key secrets for the `media` host Sonarr and Radarr instances
 
 ## What is wired up
 
@@ -67,6 +68,8 @@ Current files include:
 
 - `secrets/cloudflare-token.env.age`
 - `secrets/pia-media.env.age`
+- `secrets/recyclarr-sonarr-api-key.age`
+- `secrets/recyclarr-radarr-api-key.age`
 
 ## Cloudflare secret pattern
 
@@ -218,9 +221,25 @@ The host wiring lives in:
 
 and feeds `homelab.piaVpn.environmentFile`, which in turn is consumed by the `services."pia-vpn"` module.
 
+## Media host Recyclarr secrets
+
+The `media` host also expects:
+
+- `secrets/recyclarr-sonarr-api-key.age`
+- `secrets/recyclarr-radarr-api-key.age`
+
+Each decrypted file should contain just the raw API key value for the corresponding Arr instance.
+
+The host wiring lives in:
+
+- `modules/hosts/media.nix`
+
+and feeds `homelab.recyclarr.sonarrApiKeyFile` and `homelab.recyclarr.radarrApiKeyFile`.
+
 ## Notes
 
 - Until a host public key is added to `secrets.nix`, that host will not be able to decrypt secrets targeted at it.
 - The current repository now wires the infra host to use `secrets/cloudflare-token.env.age` for Traefik environment variables.
 - The repository includes `secrets/pia-media.env.age` for the `media` host PIA credentials; it must contain valid `PIA_USER` and `PIA_PASS` values for the tunnel to authenticate successfully.
+- The repository also includes placeholder Recyclarr API key secrets for the `media` host; replace them with the actual Sonarr and Radarr API key values before expecting Recyclarr syncs to succeed.
 - If a new host needs secrets later, remember to add its SSH host public key to `secrets.nix` and include it in the relevant recipient lists.

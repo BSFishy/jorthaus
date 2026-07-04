@@ -73,6 +73,7 @@ The `media` host currently runs:
   - Web UI auth model: authentication is currently bypassed for all client subnets
   - default completed-download path: `/srv/media/downloads/complete`
   - default incomplete-download path: `/srv/media/downloads/incomplete`
+  - repo-managed UI/runtime settings also include binding the torrent interface to `wg0` and showing the detected external IP in the status bar
   - shared permissions model: runs with the shared `media` group so Sonarr and Radarr can import from the completed-download directory
 
 - Prowlarr
@@ -99,6 +100,15 @@ The `media` host currently runs:
   - library root prepared by the repo: `/srv/media/movies`
   - completed-download source path prepared by the repo: `/srv/media/downloads/complete`
   - shared permissions model: uses the shared `media` group so it can import qBittorrent downloads into the movie library
+
+- Recyclarr
+  - module: `modules/homelab/media/recyclarr.nix`
+  - role: sync TRaSH-based quality profiles, custom formats, and media naming into the local Sonarr and Radarr instances
+  - current scope: manages the local `sonarr-4k` and `radarr-4k` configs using 4K-oriented profiles
+  - Sonarr profile: `WEB-2160p (Alternative)` with selected UHD, streaming-boost, unwanted-format, season-pack, and freeleech-related custom format groups
+  - Radarr profile: `UHD Bluray + WEB` with selected UHD, unwanted-format, movie-version, and freeleech-related custom format groups
+  - schedule: `daily`
+  - secrets required: `secrets/recyclarr-sonarr-api-key.age` and `secrets/recyclarr-radarr-api-key.age`
 
 - Media storage
   - module: `modules/homelab/media/storage.nix`
