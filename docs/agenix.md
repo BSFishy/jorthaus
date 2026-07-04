@@ -5,6 +5,7 @@ This repository uses [agenix](https://github.com/ryantm/agenix) for encrypted se
 The current intended use is to manage secrets such as:
 
 - Cloudflare API credentials for Traefik DNS challenge usage
+- PIA VPN credentials for the `media` host
 
 ## What is wired up
 
@@ -53,13 +54,19 @@ This is where recipients should be declared.
 It currently includes:
 
 - the workstation/admin key for `matt`
-- comments showing where to add host SSH host public keys later
+- the deployed host key for `infra`
+- the deployed host key for `media`
 
 ### Secret file directory
 
 Encrypted secret files should live in:
 
 - `secrets/`
+
+Current files include:
+
+- `secrets/cloudflare-token.env.age`
+- `secrets/pia-media.env.age`
 
 ## Cloudflare secret pattern
 
@@ -192,8 +199,28 @@ homelab.traefik.acmeEmail = "you@example.com";
 just switch infra
 ```
 
+## Media host PIA secret
+
+The `media` host now expects:
+
+- `secrets/pia-media.env.age`
+
+Its decrypted contents must be a simple environment file:
+
+```text
+PIA_USER=...
+PIA_PASS=...
+```
+
+The host wiring lives in:
+
+- `modules/hosts/media.nix`
+
+and feeds `homelab.piaVpn.environmentFile`, which in turn is consumed by the `services."pia-vpn"` module.
+
 ## Notes
 
 - Until a host public key is added to `secrets.nix`, that host will not be able to decrypt secrets targeted at it.
 - The current repository now wires the infra host to use `secrets/cloudflare-token.env.age` for Traefik environment variables.
+- The repository includes `secrets/pia-media.env.age` for the `media` host PIA credentials; it must contain valid `PIA_USER` and `PIA_PASS` values for the tunnel to authenticate successfully.
 - If a new host needs secrets later, remember to add its SSH host public key to `secrets.nix` and include it in the relevant recipient lists.

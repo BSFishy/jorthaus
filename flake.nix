@@ -6,6 +6,8 @@
     flake-utils.url = "github:numtide/flake-utils";
     agenix.url = "github:ryantm/agenix";
     disko.url = "github:nix-community/disko";
+    nix-pia-vpn.url = "github:rcambrj/nix-pia-vpn";
+    nix-pia-vpn.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -23,6 +25,7 @@
         shared-modules = [
           inputs.agenix.nixosModules.default
           inputs.disko.nixosModules.disko
+          inputs."nix-pia-vpn".nixosModules.default
           ./modules/homelab
           ./modules/system
         ];
@@ -47,6 +50,7 @@
             }
             inputs.agenix.nixosModules.default
             inputs.disko.nixosModules.disko
+            inputs."nix-pia-vpn".nixosModules.default
             ./modules/homelab
             ./modules/system
             ./modules/hosts/bootstrap.nix

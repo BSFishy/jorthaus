@@ -53,6 +53,26 @@ The `media` host currently runs:
   - firmware requirement: redistributable firmware enabled in NixOS for AMD GPU blobs
   - current Proxmox expectation: PCI passthrough using the `amd-igpu` resource mapping as `hostpci0`
 
+- PIA VPN
+  - module: `modules/homelab/media/pia-vpn.nix`
+  - backend: `rcambrj/nix-pia-vpn` WireGuard-based PIA integration
+  - tunnel interface: `wg0`
+  - host networking model: outbound traffic from `media` is intended to use the VPN by default
+  - local-network exceptions: destinations in `10.1.0.0/16` and `192.168.2.0/24` stay local so homelab-internal traffic does not hairpin through PIA
+  - DNS bootstrap: `media` is pinned to the local gateway DNS resolver (`10.1.0.1`) so PIA bootstrap and normal host DNS keep working on the LAN
+  - routing model: policy routing sends general outbound traffic through the PIA table while keeping the current PIA public control endpoints and local subnets reachable outside the tunnel as needed for bootstrap and local access
+  - region selection: currently pinned to `gt_guatemala-pf` to avoid unstable auto-selected regions during bring-up; `maxLatency = 10.0` remains configured but is irrelevant while the region is pinned
+  - current simplification: no extra kill-switch layer and PIA port forwarding remains disabled for now
+  - credentials: `age.secrets.pia-media-env` decrypts `secrets/pia-media.env.age` on `media`
+
+- qBittorrent
+  - module: `modules/homelab/media/qbittorrent.nix`
+  - Web UI port: `8081`
+  - exposure: direct access on the `media` host only; not currently routed through Traefik
+  - startup ordering: waits for `pia-vpn.service`
+  - Web UI auth model: authentication is currently bypassed for all client subnets
+  - download path: `/srv/media/downloads/complete`
+
 - Media storage
   - module: `modules/homelab/media/storage.nix`
   - backend: additional Proxmox VM disk on the Ceph RBD-backed `media` datastore
@@ -73,3 +93,4 @@ The `media` host currently runs:
 - If Mosquitto later needs authenticated users, secrets should be managed through agenix rather than committing credentials in the repo.
 - For Zigbee coordinators, prefer a stable guest device path such as `/dev/serial/by-id/...` once the Proxmox passthrough device is identified.
 - For Jellyfin GPU acceleration, the guest configuration assumes a render node at `/dev/dri/renderD128`; the Proxmox side must make the AMD iGPU available to the VM.
+- For the PIA VPN on `media` to authenticate successfully, `secrets/pia-media.env.age` must contain valid `PIA_USER` and `PIA_PASS` values before running `just switch media`.

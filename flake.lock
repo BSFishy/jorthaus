@@ -61,6 +61,20 @@
         "type": "github"
       }
     },
+    "flake-compat": {
+      "locked": {
+        "lastModified": 1696426674,
+        "narHash": "sha256-kvjfFW7WAETZlt09AgDn1MrtKzP7t90Vf7vypd3OL1U=",
+        "rev": "0f9255e01c2351cc7d116c072cb317785dd33b33",
+        "revCount": 57,
+        "type": "tarball",
+        "url": "https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.0.1/018afb31-abd1-7bff-a5e4-cff7e18efb7a/source.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems_2"
@@ -97,6 +111,27 @@
       "original": {
         "owner": "nix-community",
         "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "nix-pia-vpn": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1731335737,
+        "narHash": "sha256-7p0RsrFqwtgvWij8sNUK/LnuL1ERvH7/ck8Kok1sNuQ=",
+        "owner": "rcambrj",
+        "repo": "nix-pia-vpn",
+        "rev": "3501db7fd6c538107a4f0c50fc54bff998923705",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rcambrj",
+        "repo": "nix-pia-vpn",
         "type": "github"
       }
     },
@@ -153,6 +188,7 @@
         "agenix": "agenix",
         "disko": "disko",
         "flake-utils": "flake-utils",
+        "nix-pia-vpn": "nix-pia-vpn",
         "nixpkgs": "nixpkgs_3"
       }
     },
