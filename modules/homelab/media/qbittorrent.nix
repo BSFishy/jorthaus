@@ -19,17 +19,31 @@ in
       default = "/srv/media/downloads";
       description = "Root directory for qBittorrent downloads on the media disk.";
     };
+
+    group = lib.mkOption {
+      type = lib.types.str;
+      default = "media";
+      description = "Shared group for qBittorrent and related media-management services.";
+    };
   };
 
   config = lib.mkIf qbt.enable {
     networking.firewall.allowedTCPPorts = [ qbt.webuiPort ];
 
+    users.groups.${qbt.group} = { };
+
     services.qbittorrent = {
       enable = true;
       webuiPort = qbt.webuiPort;
       openFirewall = false;
+      group = qbt.group;
       extraArgs = [ "--confirm-legal-notice" ];
       serverConfig = {
+        BitTorrent.Session = {
+          DefaultSavePath = "${qbt.downloadDir}/complete";
+          TempPath = "${qbt.downloadDir}/incomplete";
+          TempPathEnabled = true;
+        };
         LegalNotice.Accepted = true;
         Preferences = {
           WebUI = {
@@ -50,8 +64,9 @@ in
       requiredBy = [ "qbittorrent.service" ];
       serviceConfig.Type = "oneshot";
       script = ''
-        install -d -m 0750 -o qbittorrent -g qbittorrent ${qbt.downloadDir}
-        install -d -m 0750 -o qbittorrent -g qbittorrent ${qbt.downloadDir}/complete
+        install -d -m 0775 -o qbittorrent -g ${qbt.group} ${qbt.downloadDir}
+        install -d -m 0775 -o qbittorrent -g ${qbt.group} ${qbt.downloadDir}/complete
+        install -d -m 0775 -o qbittorrent -g ${qbt.group} ${qbt.downloadDir}/incomplete
       '';
     };
 

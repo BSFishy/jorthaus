@@ -59,13 +59,16 @@ The infra host firewall is opened for:
 
 ## Current service routes
 
-The currently declared routed services are Home Assistant, Jellyfin, and Zigbee2MQTT.
+The currently declared routed services are Home Assistant, Jellyfin, Prowlarr, Sonarr, Radarr, and Zigbee2MQTT.
 
 Defined in:
 
 - `modules/homelab/home/home-assistant.nix`
 - `modules/homelab/home/zigbee2mqtt.nix`
 - `modules/homelab/media/jellyfin.nix`
+- `modules/homelab/media/prowlarr.nix`
+- `modules/homelab/media/sonarr.nix`
+- `modules/homelab/media/radarr.nix`
 
 Current route data:
 
@@ -85,6 +88,30 @@ Current route data:
 - backend port: `8096`
 - backend scheme: `http`
 
+### Prowlarr
+
+- hostname: `prowlarr.jort.haus`
+- backend host: `media`
+- backend IP: `10.1.4.12`
+- backend port: `9696`
+- backend scheme: `http`
+
+### Sonarr
+
+- hostname: `sonarr.jort.haus`
+- backend host: `media`
+- backend IP: `10.1.4.12`
+- backend port: `8989`
+- backend scheme: `http`
+
+### Radarr
+
+- hostname: `radarr.jort.haus`
+- backend host: `media`
+- backend IP: `10.1.4.12`
+- backend port: `7878`
+- backend scheme: `http`
+
 ### Zigbee2MQTT
 
 - hostname: `zigbee.jort.haus`
@@ -99,6 +126,12 @@ Traefik uses this to generate:
 - a backend pointing to `http://10.1.4.10:8123`
 - a hostname-based router for `jellyfin.jort.haus`
 - a backend pointing to `http://10.1.4.12:8096`
+- a hostname-based router for `prowlarr.jort.haus`
+- a backend pointing to `http://10.1.4.12:9696`
+- a hostname-based router for `sonarr.jort.haus`
+- a backend pointing to `http://10.1.4.12:8989`
+- a hostname-based router for `radarr.jort.haus`
+- a backend pointing to `http://10.1.4.12:7878`
 - a hostname-based router for `zigbee.jort.haus`
 - a backend pointing to `http://10.1.4.10:8080`
 
@@ -140,6 +173,9 @@ For example:
 
 - `hass.jort.haus` → `10.1.4.11`
 - `jellyfin.jort.haus` → `10.1.4.11`
+- `prowlarr.jort.haus` → `10.1.4.11`
+- `sonarr.jort.haus` → `10.1.4.11`
+- `radarr.jort.haus` → `10.1.4.11`
 - `zigbee.jort.haus` → `10.1.4.11`
 
 This wildcard local DNS setup means additional routed services under `*.jort.haus` do not need separate local DNS records as long as they should terminate at the same Traefik host.
@@ -188,6 +224,9 @@ Examples:
 
 - `hass.jort.haus` → `10.1.4.11`
 - `jellyfin.jort.haus` → `10.1.4.11`
+- `prowlarr.jort.haus` → `10.1.4.11`
+- `sonarr.jort.haus` → `10.1.4.11`
+- `radarr.jort.haus` → `10.1.4.11`
 - `zigbee.jort.haus` → `10.1.4.11`
 
 Internal clients should hit Traefik directly over the LAN.
@@ -206,6 +245,9 @@ Examples:
 
 - `hass.jort.haus` → public WAN IP in Cloudflare DNS
 - `jellyfin.jort.haus` → public WAN IP in Cloudflare DNS
+- `prowlarr.jort.haus` → public WAN IP in Cloudflare DNS
+- `sonarr.jort.haus` → public WAN IP in Cloudflare DNS
+- `radarr.jort.haus` → public WAN IP in Cloudflare DNS
 - `zigbee.jort.haus` → public WAN IP in Cloudflare DNS
 
 External clients should reach the service through Cloudflare rather than connecting directly to the raw public IP endpoint.

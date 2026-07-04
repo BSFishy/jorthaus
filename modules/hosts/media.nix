@@ -11,6 +11,9 @@
       maxLatency = 10.0;
     };
     qbittorrent.enable = true;
+    prowlarr.enable = true;
+    radarr.enable = true;
+    sonarr.enable = true;
   };
 
   age.secrets.pia-media-env = {

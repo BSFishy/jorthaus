@@ -61,7 +61,7 @@ The `media` host currently runs:
   - local-network exceptions: destinations in `10.1.0.0/16` and `192.168.2.0/24` stay local so homelab-internal traffic does not hairpin through PIA
   - DNS bootstrap: `media` is pinned to the local gateway DNS resolver (`10.1.0.1`) so PIA bootstrap and normal host DNS keep working on the LAN
   - routing model: policy routing sends general outbound traffic through the PIA table while keeping the current PIA public control endpoints and local subnets reachable outside the tunnel as needed for bootstrap and local access
-  - region selection: currently pinned to `gt_guatemala-pf` to avoid unstable auto-selected regions during bring-up; `maxLatency = 10.0` remains configured but is irrelevant while the region is pinned
+  - region selection: currently pinned to `us_chicago`; `maxLatency = 10.0` remains configured but is irrelevant while the region is pinned
   - current simplification: no extra kill-switch layer and PIA port forwarding remains disabled for now
   - credentials: `age.secrets.pia-media-env` decrypts `secrets/pia-media.env.age` on `media`
 
@@ -71,7 +71,34 @@ The `media` host currently runs:
   - exposure: direct access on the `media` host only; not currently routed through Traefik
   - startup ordering: waits for `pia-vpn.service`
   - Web UI auth model: authentication is currently bypassed for all client subnets
-  - download path: `/srv/media/downloads/complete`
+  - default completed-download path: `/srv/media/downloads/complete`
+  - default incomplete-download path: `/srv/media/downloads/incomplete`
+  - shared permissions model: runs with the shared `media` group so Sonarr and Radarr can import from the completed-download directory
+
+- Prowlarr
+  - module: `modules/homelab/media/prowlarr.nix`
+  - Web UI port: `9696`
+  - external hostname: `prowlarr.jort.haus`
+  - exposed through Traefik on `infra`
+  - auth model: configured for external auth handling, matching the current Sonarr/Radarr pattern
+
+- Sonarr
+  - module: `modules/homelab/media/sonarr.nix`
+  - Web UI port: `8989`
+  - external hostname: `sonarr.jort.haus`
+  - exposed through Traefik on `infra`
+  - library root prepared by the repo: `/srv/media/tv`
+  - completed-download source path prepared by the repo: `/srv/media/downloads/complete`
+  - shared permissions model: uses the shared `media` group so it can import qBittorrent downloads into the TV library
+
+- Radarr
+  - module: `modules/homelab/media/radarr.nix`
+  - Web UI port: `7878`
+  - external hostname: `radarr.jort.haus`
+  - exposed through Traefik on `infra`
+  - library root prepared by the repo: `/srv/media/movies`
+  - completed-download source path prepared by the repo: `/srv/media/downloads/complete`
+  - shared permissions model: uses the shared `media` group so it can import qBittorrent downloads into the movie library
 
 - Media storage
   - module: `modules/homelab/media/storage.nix`
