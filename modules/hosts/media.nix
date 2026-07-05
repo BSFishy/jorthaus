@@ -2,6 +2,7 @@
 
 {
   homelab = {
+    flaresolverr.enable = true;
     jellyfin.enable = true;
     media-storage.enable = true;
     piaVpn = {

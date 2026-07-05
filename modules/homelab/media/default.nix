@@ -2,6 +2,7 @@ _:
 
 {
   imports = [
+    ./flaresolverr.nix
     ./jellyfin.nix
     ./pia-vpn.nix
     ./prowlarr.nix

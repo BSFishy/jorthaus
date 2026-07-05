@@ -55,6 +55,13 @@ The `media` host currently runs:
   - firmware requirement: redistributable firmware enabled in NixOS for AMD GPU blobs
   - current Proxmox expectation: PCI passthrough using the `amd-igpu` resource mapping as `hostpci0`
 
+- FlareSolverr
+  - module: `modules/homelab/media/flaresolverr.nix`
+  - listen port: `8191`
+  - exposure: host-local/internal helper service on `media`; not currently routed through Traefik
+  - firewall policy: closed by default in the repo because the expected consumer is local media tooling such as Prowlarr on the same host
+  - startup ordering: waits for `pia-vpn.service` when the media host VPN is enabled
+
 - PIA VPN
   - module: `modules/homelab/media/pia-vpn.nix`
   - backend: `rcambrj/nix-pia-vpn` WireGuard-based PIA integration

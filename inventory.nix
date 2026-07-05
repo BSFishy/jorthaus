@@ -73,7 +73,7 @@
     proxmox = {
       nodeName = "gaia-05";
       cpuCores = 2;
-      memory = 2048;
+      memory = 5120;
       diskSize = 20;
       machine = "q35";
       bios = "ovmf";
