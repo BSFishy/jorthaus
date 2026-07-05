@@ -49,6 +49,8 @@ The `media` host currently runs:
   - external hostname: `jellyfin.jort.haus`
   - exposed through Traefik on `infra`
   - hardware acceleration: VA-API via `/dev/dri/renderD128`
+  - HDR tone-mapping support: AMD OpenCL userspace is enabled via `hardware.amdgpu.opencl.enable = true`, which installs both the ROCm OpenCL runtime and its ICD registration so Jellyfin can expose the OpenCL tone-mapping path when the runtime is detected correctly
+  - host verification tools: `clinfo` and `rocminfo` are installed on `media` to confirm the OpenCL runtime is visible after deployment
   - transcoding behavior: throttling enabled when playback is buffered ahead
   - firmware requirement: redistributable firmware enabled in NixOS for AMD GPU blobs
   - current Proxmox expectation: PCI passthrough using the `amd-igpu` resource mapping as `hostpci0`

@@ -1,4 +1,4 @@
-{ config, inventory, lib, ... }:
+{ config, inventory, lib, pkgs, ... }:
 
 let
   cfg = config.homelab;
@@ -36,6 +36,12 @@ in
 
     hardware.enableRedistributableFirmware = cfg.jellyfin.enable;
     hardware.graphics.enable = cfg.jellyfin.enable;
+    hardware.amdgpu.opencl.enable = cfg.jellyfin.enable;
+
+    environment.systemPackages = lib.optionals cfg.jellyfin.enable [
+      pkgs.clinfo
+      pkgs.rocmPackages.rocminfo
+    ];
 
     services.jellyfin = {
       enable = cfg.jellyfin.enable;

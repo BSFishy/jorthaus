@@ -127,6 +127,12 @@ resource "proxmox_virtual_environment_vm" "host" {
     timeout = "15m"
     trim    = false
     type    = "virtio"
+
+    wait_for_ip {
+      enabled = true
+      ipv4    = true
+      ipv6    = true
+    }
   }
 
   initialization {

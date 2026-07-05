@@ -176,6 +176,27 @@ This implies the surrounding environment must support:
 - gateway `10.1.0.1`
 - routing/connectivity between the Proxmox guest network and the machine from which `nh os switch` and SSH are run
 
+### SLAAC IPv6 on `infra`
+
+The `infra` host is also intended to accept IPv6 router advertisements on its primary interface so it can acquire a LAN IPv6 address via SLAAC.
+
+Current repository approach:
+
+- keep inventory-managed IPv4 as the source of truth
+- let `infra` learn its global IPv6 address from router advertisements
+- disable IPv6 temporary privacy addresses on `infra` so the primary SLAAC address is stable across reboots
+- let OpenTofu consume the `infra` VM's guest-agent-reported global IPv6 for the wildcard internal `AAAA` DNS record instead of pinning that address directly in inventory
+
+Operational expectation:
+
+- the global IPv6 on `infra` should remain stable across reboots as long as the delegated prefix and interface identity stay the same
+- if the upstream delegated prefix changes, the global IPv6 address will change too
+
+This means the surrounding network must provide:
+
+- IPv6 router advertisements on the guest LAN
+- a reasonably stable delegated prefix if local AAAA-based routing should stay predictable over time
+
 ## Proxmox API reachability
 
 The current environment assumes the Proxmox API is reachable at:

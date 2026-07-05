@@ -40,7 +40,8 @@ Current network assumptions:
 Traefik currently runs on:
 
 - `infra`
-- IP: `10.1.4.11`
+- IPv4: `10.1.4.11`
+- IPv6: intended to be learned on-LAN via SLAAC rather than pinned in `inventory.nix`
 
 Traefik currently listens on:
 
@@ -143,14 +144,16 @@ Defined in:
 
 - `terraform/dns.tf`
 
-Current record:
+Current records:
 
-- `*.jort.haus` → `infra` host IP
-- current resolved value: `10.1.4.11`
+- `*.jort.haus` → `infra` host IPv4
+- `*.jort.haus` → `infra` host global IPv6 when a usable SLAAC address is reported through the Proxmox guest agent
+- current verified IPv4 value: `10.1.4.11`
 
 That means the current local DNS model is:
 
 - UniFi provides internal DNS answers
+- the wildcard `AAAA` record is intended to be derived from the `infra` VM's guest-agent-reported global IPv6 rather than hard-coded in the repo
 
 ## Current router port forwarding
 
@@ -308,6 +311,19 @@ The current setup assumes:
 - router forwards HTTP/HTTPS to Traefik
 - UniFi local DNS provides a wildcard `*.jort.haus` record pointing to `infra`
 - Cloudflare is used for DNS-challenge TLS issuance
+
+## Local IPv6 routing note
+
+The current near-term plan is to let `infra` acquire a stable LAN IPv6 address via SLAAC and then use that address for local AAAA-based routing.
+
+Current approach (option A):
+
+- enable SLAAC on `infra`
+- keep the IPv6 address dynamic rather than pinning it in repo inventory
+- rely on the SLAAC address being stable across reboots unless the delegated prefix changes
+- have OpenTofu derive the wildcard internal `AAAA` record from the `infra` VM's guest-agent-reported global IPv6 address instead of hard-coding it
+
+If that turns out to be too annoying operationally, the repo may later move to a more explicit IPv6 discovery or assignment model.
 
 ## Planned remote access and filtering
 
