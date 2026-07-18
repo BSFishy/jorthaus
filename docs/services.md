@@ -85,6 +85,28 @@ The `media` host currently runs:
   - repo-managed UI/runtime settings also include binding the torrent interface to `wg0` and showing the detected external IP in the status bar
   - shared permissions model: runs with the shared `media` group so Sonarr and Radarr can import from the completed-download directory
 
+- qBitrr
+  - module: `modules/homelab/media/qbitrr.nix`
+  - role: continuous Arr-aware qBittorrent health manager for `media`
+  - current loop interval: every `900` seconds (`15` minutes)
+  - current stalled threshold: `720` minutes (`12` hours)
+  - current scope: only the configured Arr categories (`sonarr` and `radarr` by default)
+  - current behavior: stalled Arr-category torrents are eligible for removal and re-search; Arr API keys are read from the same secret files already used by Recyclarr unless overridden
+  - Web UI: local-only on `127.0.0.1:6969`
+  - startup ordering: waits for qBittorrent, Sonarr, Radarr, and `pia-vpn.service` when the media host VPN is enabled
+  - operational note: category names must match the qBittorrent categories configured in the Arr download-client settings
+
+- qbit_manage
+  - module: `modules/homelab/media/qbit-manage.nix`
+  - role: scheduled qBittorrent cleanup helper for orphaned data and unregistered torrents
+  - schedule: `daily`
+  - current mode on `media`: live mode (`dryRun = false`), after an initial manual validation in dry-run mode
+  - current enabled commands: orphaned-data cleanup and unregistered-torrent cleanup
+  - current filesystem scope: `/srv/media/downloads`
+  - qBittorrent metadata source: `/var/lib/qBittorrent/qBittorrent/data/BT_backup` on the host, used as `torrents_dir` so qbit_manage can access saved `.torrent` metadata when needed
+  - current category mappings: `sonarr` and `radarr` both map to `/srv/media/downloads/complete`
+  - startup ordering: requires qBittorrent and `/srv/media`
+
 - Prowlarr
   - module: `modules/homelab/media/prowlarr.nix`
   - Web UI port: `9696`

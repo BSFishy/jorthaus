@@ -6,6 +6,8 @@ _:
     ./jellyfin.nix
     ./pia-vpn.nix
     ./prowlarr.nix
+    ./qbit-manage.nix
+    ./qbitrr.nix
     ./qbittorrent.nix
     ./radarr.nix
     ./recyclarr.nix

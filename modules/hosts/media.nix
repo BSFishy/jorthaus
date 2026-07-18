@@ -5,6 +5,11 @@
     flaresolverr.enable = true;
     jellyfin.enable = true;
     media-storage.enable = true;
+    qbitManage = {
+      enable = true;
+      dryRun = false;
+    };
+    qbitrr.enable = true;
     piaVpn = {
       enable = true;
       environmentFile = config.age.secrets.pia-media-env.path;
