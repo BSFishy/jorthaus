@@ -137,6 +137,7 @@ The `media` host currently runs:
   - role: sync TRaSH-based quality profiles, custom formats, and media naming into the local Sonarr and Radarr instances
   - current scope: manages the local `sonarr-4k` and `radarr-4k` configs using 4K-oriented profiles
   - Sonarr profile: `WEB-2160p (Alternative)` with selected UHD, streaming-boost, unwanted-format, season-pack, and freeleech-related custom format groups
+  - Sonarr anime preference: assigns `Anime Dual Audio` a score of `101` and `Dubs Only` a score of `100`, so dubbed anime is preferred while still slightly favoring dual-audio releases over dub-only releases
   - Radarr profile: `UHD Bluray + WEB` with selected UHD, unwanted-format, movie-version, and freeleech-related custom format groups
   - schedule: `daily`
   - secrets required: `secrets/recyclarr-sonarr-api-key.age` and `secrets/recyclarr-radarr-api-key.age`

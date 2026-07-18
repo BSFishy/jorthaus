@@ -117,6 +117,31 @@ in
               }
             ];
 
+            custom_formats = [
+              {
+                trash_ids = [
+                  "418f50b10f1907201b6cfdf881f467b7" # Anime Dual Audio
+                ];
+                assign_scores_to = [
+                  {
+                    trash_id = "dfa5eaae7894077ad6449169b6eb03e0"; # WEB-2160p (Alternative)
+                    score = 101;
+                  }
+                ];
+              }
+              {
+                trash_ids = [
+                  "9c14d194486c4014d422adc64092d794" # Dubs Only
+                ];
+                assign_scores_to = [
+                  {
+                    trash_id = "dfa5eaae7894077ad6449169b6eb03e0"; # WEB-2160p (Alternative)
+                    score = 100;
+                  }
+                ];
+              }
+            ];
+
             media_naming = {
               series = "jellyfin-tvdb";
               season = "default";
