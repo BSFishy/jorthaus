@@ -56,6 +56,7 @@ in
 
       transcoding = {
         enableHardwareEncoding = true;
+        enableToneMapping = false;
         throttleTranscoding = true;
         hardwareDecodingCodecs = {
           h264 = true;
