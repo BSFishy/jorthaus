@@ -3,6 +3,7 @@ _:
 {
   imports = [
     ./boot.nix
+    ./disko.nix
     ./ephemeral-root.nix
     ./hardware.nix
     ./impermanence.nix

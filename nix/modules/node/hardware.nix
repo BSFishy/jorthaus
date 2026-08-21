@@ -2,15 +2,16 @@
 let
   root = host.disk.root;
   useBtrfsEphemeralRoot = root.btrfs.enable or false;
+  useDisko = (host.install or { }) ? systemDisk;
 in
 {
   hardware.facter.reportPath = host.facter;
 
-  fileSystems = {
+  fileSystems = lib.optionalAttrs (!useDisko) ({
     "/boot" = host.disk.boot;
   } // lib.optionalAttrs (!useBtrfsEphemeralRoot) {
     "/" = root;
-  };
+  });
 
-  swapDevices = [ host.disk.swap ];
+  swapDevices = lib.optional (!useDisko) host.disk.swap;
 }

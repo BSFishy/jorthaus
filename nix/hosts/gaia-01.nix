@@ -13,14 +13,35 @@
     };
   };
 
+  install = {
+    systemDisk = {
+      device = "/dev/disk/by-id/nvme-CT1000P510SSD8_2537E9CAEBD7";
+      bootSize = "1G";
+      swapSize = "16G";
+    };
+
+    dataDisks = [
+      {
+        name = "storage";
+        device = "/dev/disk/by-id/nvme-Samsung_SSD_990_EVO_Plus_2TB_S7U6NU0Y716078M";
+        fsType = "xfs";
+        label = "storage";
+        mountpoint = "/srv/storage";
+      }
+    ];
+  };
+
   disk = {
     root = {
-      device = "/dev/disk/by-uuid/a6e0744b-b49c-4e5f-9313-008f08542471";
-      fsType = "ext4";
+      device = "/dev/disk/by-label/nixos";
+      fsType = "btrfs";
+      btrfs = {
+        enable = true;
+      };
     };
 
     boot = {
-      device = "/dev/disk/by-uuid/9682-9CCA";
+      device = "/dev/disk/by-label/BOOT";
       fsType = "vfat";
       options = [
         "fmask=0077"
@@ -29,7 +50,7 @@
     };
 
     swap = {
-      device = "/dev/disk/by-uuid/c95d5020-209a-4612-a522-4a1b3453f39f";
+      device = "/dev/disk/by-partlabel/swap";
     };
   };
 }
