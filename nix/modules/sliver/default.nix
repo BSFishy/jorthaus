@@ -2,7 +2,6 @@ _:
 
 {
   imports = [
-    ./node
-    ./sliver
+    ./openbao.nix
   ];
 }

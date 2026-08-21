@@ -1,4 +1,9 @@
-{ host, inputs, lib, ... }:
+{
+  host,
+  inputs,
+  lib,
+  ...
+}:
 let
   install = host.install or { };
   systemDisk = install.systemDisk or null;
@@ -25,7 +30,8 @@ let
             "-L"
             dataDisk.label
           ];
-        } // lib.optionalAttrs (dataDisk ? mountOptions) {
+        }
+        // lib.optionalAttrs (dataDisk ? mountOptions) {
           mountOptions = dataDisk.mountOptions;
         };
       };
@@ -54,7 +60,10 @@ in
                 format = "vfat";
                 mountpoint = "/boot";
                 mountOptions = [ "umask=0077" ];
-                extraArgs = [ "-n" bootLabel ];
+                extraArgs = [
+                  "-n"
+                  bootLabel
+                ];
               };
             };
 
@@ -96,11 +105,9 @@ in
           };
         };
       };
-    } // lib.listToAttrs (
-      map (
-        dataDisk:
-        lib.nameValuePair dataDisk.name (mkDataDisk dataDisk)
-      ) dataDisks
+    }
+    // lib.listToAttrs (
+      map (dataDisk: lib.nameValuePair dataDisk.name (mkDataDisk dataDisk)) dataDisks
     );
   };
 }

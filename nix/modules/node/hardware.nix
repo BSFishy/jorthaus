@@ -7,11 +7,14 @@ in
 {
   hardware.facter.reportPath = host.facter;
 
-  fileSystems = lib.optionalAttrs (!useDisko) ({
-    "/boot" = host.disk.boot;
-  } // lib.optionalAttrs (!useBtrfsEphemeralRoot) {
-    "/" = root;
-  });
+  fileSystems = lib.optionalAttrs (!useDisko) (
+    {
+      "/boot" = host.disk.boot;
+    }
+    // lib.optionalAttrs (!useBtrfsEphemeralRoot) {
+      "/" = root;
+    }
+  );
 
   swapDevices = lib.optional (!useDisko) host.disk.swap;
 }
