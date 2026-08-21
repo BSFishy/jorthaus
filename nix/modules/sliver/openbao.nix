@@ -4,6 +4,7 @@ let
   cfg = host.slivers.openbao or { };
   enabled = cfg.enable or false;
   ipv4Address = host.ipam.ipv4.address;
+  serviceAddress = "10.1.11.10";
 in
 {
   config = lib.mkIf enabled {
@@ -24,6 +25,8 @@ in
         mode = "0700";
       }
     ];
+
+    jorthaus.routing.loopbackAddresses = [ "${serviceAddress}/32" ];
 
     # TODO: currently not accepting connections on port 8201. need to look into
     # that.
@@ -47,13 +50,12 @@ in
       settings = {
         ui = true;
 
-        # TODO: fix this address, its not right
-        api_addr = "https://${ipv4Address}:8200";
+        # TODO: use dns records rather than ips for proper tls
+        api_addr = "https://${serviceAddress}:8200";
         cluster_addr = "https://${ipv4Address}:8201";
 
         listener.default = {
           type = "tcp";
-          # TODO: use dedicated anycast ip here
           address = "[::]:8200";
           cluster_address = "[::]:8201";
         };

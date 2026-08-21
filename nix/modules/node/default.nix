@@ -2,6 +2,7 @@ _:
 
 {
   imports = [
+    ./bird.nix
     ./boot.nix
     ./disko.nix
     ./ephemeral-root.nix

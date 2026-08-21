@@ -1,0 +1,28 @@
+frr defaults datacenter
+hostname ${hostname}
+service integrated-vtysh-config
+!
+router bgp ${router_as}
+ bgp router-id ${router_id}
+ no bgp default ipv4-unicast
+ maximum-paths 32
+ coalesce-time 1000
+!
+ neighbor JORTHAUS peer-group
+ neighbor JORTHAUS remote-as ${node_as}
+ neighbor JORTHAUS bfd
+ neighbor JORTHAUS timers 3 9
+%{ for neighbor in neighbors ~}
+ neighbor ${neighbor.address} peer-group JORTHAUS
+ neighbor ${neighbor.address} description ${neighbor.name}
+%{ endfor ~}
+!
+ address-family ipv4 unicast
+%{ for neighbor in neighbors ~}
+  neighbor ${neighbor.address} activate
+  neighbor ${neighbor.address} soft-reconfiguration inbound
+%{ endfor ~}
+ exit-address-family
+!
+line vty
+!
