@@ -22,7 +22,10 @@
     boot = {
       device = "/dev/disk/by-uuid/9682-9CCA";
       fsType = "vfat";
-      options = [ "fmask=0077" "dmask=0077" ];
+      options = [
+        "fmask=0077"
+        "dmask=0077"
+      ];
     };
 
     swap = {

@@ -1,4 +1,8 @@
-{ pkgs, system, hostNames }:
+{
+  pkgs,
+  system,
+  hostNames,
+}:
 pkgs.writeShellApplication {
   name = "cluster-info";
   text = ''

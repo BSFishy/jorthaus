@@ -3,9 +3,7 @@ let
   ipam = host.ipam;
   ipv4 = ipam.ipv4 or null;
   nameservers =
-    ipam.nameservers or (
-      if ipv4 != null && ipv4 ? dnsServer then ipv4.dnsServer else [ ]
-    );
+    ipam.nameservers or (if ipv4 != null && ipv4 ? dnsServer then ipv4.dnsServer else [ ]);
 in
 {
   networking.hostName = host.hostname;

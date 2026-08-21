@@ -23,7 +23,9 @@
       mkHost =
         name:
         let
-          host = hostInventory.${name} // { inherit name; };
+          host = hostInventory.${name} // {
+            inherit name;
+          };
         in
         lib.nixosSystem {
           system = host.system;
@@ -44,7 +46,7 @@
       perSystem =
         { pkgs, system, ... }:
         {
-          formatter = pkgs.nixfmt-rfc-style;
+          formatter = pkgs.nixfmt-tree;
 
           packages = {
             cluster-info = import ./nix/packages/cluster-info.nix {
