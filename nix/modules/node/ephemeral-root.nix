@@ -1,14 +1,16 @@
-{ host, lib, ... }:
+{ config, host, lib, utils, ... }:
 let
   root = host.disk.root;
   btrfs = root.btrfs or { };
   enabled = btrfs.enable or false;
   useDisko = (host.install or { }) ? systemDisk;
-  mountDevice = btrfs.device or root.device;
+  mountDevice = if useDisko then config.fileSystems."/".device else btrfs.device or root.device;
+  mountDeviceUnit = "${utils.escapeSystemdPath mountDevice}.device";
   rootSubvolume = btrfs.rootSubvolume or "root";
   oldRootsSubvolume = btrfs.oldRootsSubvolume or "old_roots";
   persistentSubvolume = btrfs.persistentSubvolume or "persistent";
   nixSubvolume = btrfs.nixSubvolume or "nix";
+  oldRootsRetentionDays = toString (btrfs.oldRootsRetentionDays or 30);
 in
 {
   config = lib.mkIf enabled (
@@ -54,12 +56,16 @@ in
           description = "Rotate the btrfs root subvolume before mounting /sysroot";
           wantedBy = [ "initrd.target" ];
           before = [ "sysroot.mount" ];
-          after = [ "systemd-udev-settle.service" ];
+          after = [
+            "systemd-udev-settle.service"
+            mountDeviceUnit
+          ];
+          requires = [ mountDeviceUnit ];
           unitConfig.DefaultDependencies = false;
           serviceConfig.Type = "oneshot";
           script = ''
             mkdir -p /btrfs_tmp
-            mount -o subvolid=5 ${lib.escapeShellArg mountDevice} /btrfs_tmp
+            mount -t btrfs -o subvolid=5 ${lib.escapeShellArg mountDevice} /btrfs_tmp
 
             if [[ -e /btrfs_tmp/${rootSubvolume} ]]; then
               mkdir -p /btrfs_tmp/${oldRootsSubvolume}
@@ -74,6 +80,12 @@ in
               done
               btrfs subvolume delete "$1"
             }
+
+            if [[ -d /btrfs_tmp/${oldRootsSubvolume} ]]; then
+              for old_root in $(find /btrfs_tmp/${oldRootsSubvolume} -maxdepth 1 -mindepth 1 -mtime +${oldRootsRetentionDays}); do
+                delete_subvolume_recursively "$old_root"
+              done
+            fi
 
             btrfs subvolume create /btrfs_tmp/${rootSubvolume}
             umount /btrfs_tmp
