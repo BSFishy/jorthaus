@@ -2,10 +2,10 @@ dns_domain = "jort.haus"
 site       = "default"
 
 dns_hosts = {
-  gaia-01 = "10.1.10.1"
-  gaia-02 = "10.1.10.2"
-  gaia-03 = "10.1.10.3"
-  openbao = "10.1.11.10"
+  "gaia-01.node" = "10.1.10.1"
+  "gaia-02.node" = "10.1.10.2"
+  "gaia-03.node" = "10.1.10.3"
+  "openbao.service" = "10.1.11.10"
 }
 
 frr_enable      = true

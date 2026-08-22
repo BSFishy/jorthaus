@@ -1,12 +1,18 @@
-{ config, host, lib, ... }:
+{
+  config,
+  host,
+  lib,
+  ...
+}:
 
 let
   cfg = host.slivers.openbao or { };
   enabled = cfg.enable or false;
   serviceAddress = "10.1.11.10";
   certName = "openbao-${host.hostname}";
-  nodeDnsName = "${host.hostname}.jort.haus";
-  apiDnsName = "openbao.jort.haus";
+  nodeDnsName = "${host.hostname}.node.jort.haus";
+  internalApiDnsName = "openbao.service.jort.haus";
+  externalApiDnsName = "openbao.jort.haus";
   certDir = config.security.acme.certs.${certName}.directory;
 in
 {
@@ -22,7 +28,10 @@ in
 
     security.acme.certs.${certName} = {
       domain = nodeDnsName;
-      extraDomainNames = [ apiDnsName ];
+      extraDomainNames = [
+        internalApiDnsName
+        externalApiDnsName
+      ];
       group = "openbao";
       reloadServices = [ "openbao.service" ];
     };
@@ -65,7 +74,7 @@ in
       settings = {
         ui = true;
 
-        api_addr = "https://${apiDnsName}:8200";
+        api_addr = "https://${externalApiDnsName}:8200";
         cluster_addr = "https://${nodeDnsName}:8201";
 
         listener.default = {

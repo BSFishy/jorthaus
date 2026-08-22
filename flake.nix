@@ -17,7 +17,12 @@
   };
 
   outputs =
-    inputs@{ agenix, flake-parts, nixpkgs, ... }:
+    inputs@{
+      agenix,
+      flake-parts,
+      nixpkgs,
+      ...
+    }:
     let
       lib = nixpkgs.lib;
       hostInventory = import ./nix/hosts;

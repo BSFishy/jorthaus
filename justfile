@@ -6,11 +6,11 @@ default:
 
 # ssh into a nixos node
 ssh host:
-  ssh matt@{{host}}.jort.haus
+  ssh matt@{{host}}.node.jort.haus
 
 # build and switch a nixos node
 switch host:
-  nh os switch --elevation-strategy passwordless --target-host {{host}}.jort.haus .#{{host}}
+  nh os switch --elevation-strategy passwordless --target-host {{host}}.node.jort.haus .#{{host}}
 
 # install a nixos node from a live environment over ssh
 install-node target host:
@@ -29,3 +29,7 @@ apply-unifi:
 # create or edit an agenix-managed secret file
 secret-edit name:
   agenix -e secrets/{{name}} -i "$HOME/.ssh/id_ed25519"
+
+# re-encrypts all secrets with specified recipients
+secret-rekey:
+  agenix -r -i "$HOME/.ssh/id_ed25519"
