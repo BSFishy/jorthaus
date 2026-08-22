@@ -1,5 +1,6 @@
-dns_domain = "jort.haus"
-site       = "default"
+dns_domain         = "jort.haus"
+site               = "default"
+cloudflare_zone_id = "699fb046c6fd4a29e5acde2b794a7722"
 
 dns_hosts = {
   "gaia-01.node" = "10.1.10.1"

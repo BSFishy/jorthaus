@@ -1,5 +1,10 @@
 terraform {
   required_providers {
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.8"
+    }
+
     local = {
       source  = "hashicorp/local"
       version = "~> 2.5"
@@ -13,3 +18,4 @@ terraform {
 }
 
 provider "unifi" {}
+provider "cloudflare" {}
