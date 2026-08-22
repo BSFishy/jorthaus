@@ -6,6 +6,8 @@ let
 in
 {
   hardware.facter.reportPath = host.facter;
+  hardware.facter.detected.dhcp.enable = false;
+  hardware.bluetooth.enable = false;
 
   fileSystems = lib.optionalAttrs (!useDisko) (
     {

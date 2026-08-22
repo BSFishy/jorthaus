@@ -38,6 +38,11 @@ in
 
       users.users.matt.extraGroups = [ "bird" ];
 
+      systemd.services.bird = {
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+      };
+
       environment.systemPackages = [
         (pkgs.writeShellScriptBin "jorthaus-service-ip" ''
           set -eu
