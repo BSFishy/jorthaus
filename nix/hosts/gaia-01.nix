@@ -24,7 +24,6 @@
       {
         name = "storage";
         device = "/dev/disk/by-id/nvme-Samsung_SSD_990_EVO_Plus_2TB_S7U6NU0Y716078M";
-        fsType = "xfs";
         label = "storage";
         mountpoint = "/srv/storage";
       }

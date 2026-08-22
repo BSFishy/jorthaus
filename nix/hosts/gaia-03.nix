@@ -13,14 +13,34 @@
     };
   };
 
+  install = {
+    systemDisk = {
+      device = "/dev/disk/by-id/nvme-TWSC_TSC3AN1T0-F6Q10S_TTSQA255FX10920";
+      bootSize = "1G";
+      swapSize = "16G";
+    };
+
+    dataDisks = [
+      {
+        name = "storage";
+        device = "/dev/disk/by-id/nvme-Samsung_SSD_990_EVO_Plus_2TB_S7U6NU0Y707633R";
+        label = "storage";
+        mountpoint = "/srv/storage";
+      }
+    ];
+  };
+
   disk = {
     root = {
-      device = "/dev/disk/by-uuid/9f2f1ef4-cbdd-4815-bf9c-2172a22985df";
-      fsType = "ext4";
+      device = "/dev/disk/by-label/nixos";
+      fsType = "btrfs";
+      btrfs = {
+        enable = true;
+      };
     };
 
     boot = {
-      device = "/dev/disk/by-uuid/ECF1-CCC9";
+      device = "/dev/disk/by-label/BOOT";
       fsType = "vfat";
       options = [
         "fmask=0077"
@@ -29,7 +49,7 @@
     };
 
     swap = {
-      device = "/dev/disk/by-uuid/f6824e5e-9225-4e14-8f28-96c6a64e0016";
+      device = "/dev/disk/by-partlabel/swap";
     };
   };
 }
