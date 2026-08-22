@@ -57,78 +57,82 @@ in
 
     install = {
       systemDisk = mkOption {
-        type = types.nullOr (types.submodule {
-          options = {
-            device = mkOption {
-              type = types.str;
-              description = "Disko install target for the OS disk.";
-            };
+        type = types.nullOr (
+          types.submodule {
+            options = {
+              device = mkOption {
+                type = types.str;
+                description = "Disko install target for the OS disk.";
+              };
 
-            bootSize = mkOption {
-              type = types.str;
-              default = "1G";
-              description = "EFI system partition size.";
-            };
+              bootSize = mkOption {
+                type = types.str;
+                default = "1G";
+                description = "EFI system partition size.";
+              };
 
-            swapSize = mkOption {
-              type = types.str;
-              default = "16G";
-              description = "Swap partition size.";
-            };
+              swapSize = mkOption {
+                type = types.str;
+                default = "16G";
+                description = "Swap partition size.";
+              };
 
-            rootLabel = mkOption {
-              type = types.str;
-              default = "nixos";
-              description = "Filesystem label for the Btrfs root disk.";
-            };
+              rootLabel = mkOption {
+                type = types.str;
+                default = "nixos";
+                description = "Filesystem label for the Btrfs root disk.";
+              };
 
-            bootLabel = mkOption {
-              type = types.str;
-              default = "BOOT";
-              description = "Filesystem label for the EFI system partition.";
+              bootLabel = mkOption {
+                type = types.str;
+                default = "BOOT";
+                description = "Filesystem label for the EFI system partition.";
+              };
             };
-          };
-        });
+          }
+        );
         default = null;
         description = "Install-time Disko configuration for the OS disk.";
       };
 
       dataDisks = mkOption {
-        type = types.listOf (types.submodule {
-          options = {
-            name = mkOption {
-              type = types.str;
-              description = "Logical name for the data disk in Disko.";
-            };
+        type = types.listOf (
+          types.submodule {
+            options = {
+              name = mkOption {
+                type = types.str;
+                description = "Logical name for the data disk in Disko.";
+              };
 
-            device = mkOption {
-              type = types.str;
-              description = "Install target for the data disk.";
-            };
+              device = mkOption {
+                type = types.str;
+                description = "Install target for the data disk.";
+              };
 
-            fsType = mkOption {
-              type = types.str;
-              default = "xfs";
-              description = "Filesystem format for the data disk.";
-            };
+              fsType = mkOption {
+                type = types.str;
+                default = "xfs";
+                description = "Filesystem format for the data disk.";
+              };
 
-            label = mkOption {
-              type = types.str;
-              description = "Filesystem label for the data disk.";
-            };
+              label = mkOption {
+                type = types.str;
+                description = "Filesystem label for the data disk.";
+              };
 
-            mountpoint = mkOption {
-              type = types.str;
-              description = "Mount point for the data disk.";
-            };
+              mountpoint = mkOption {
+                type = types.str;
+                description = "Mount point for the data disk.";
+              };
 
-            mountOptions = mkOption {
-              type = types.nullOr (types.listOf types.str);
-              default = null;
-              description = "Optional mount options for the data disk.";
+              mountOptions = mkOption {
+                type = types.nullOr (types.listOf types.str);
+                default = null;
+                description = "Optional mount options for the data disk.";
+              };
             };
-          };
-        });
+          }
+        );
         default = [ ];
         description = "Additional data disks managed by Disko.";
       };

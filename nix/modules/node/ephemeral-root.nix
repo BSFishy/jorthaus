@@ -1,4 +1,10 @@
-{ config, host, lib, utils, ... }:
+{
+  config,
+  host,
+  lib,
+  utils,
+  ...
+}:
 let
   root = host.disk.root;
   btrfs = root.btrfs;
