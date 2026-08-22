@@ -1,10 +1,13 @@
-{ host, lib, ... }:
+{ config, host, lib, ... }:
 
 let
   cfg = host.slivers.openbao or { };
   enabled = cfg.enable or false;
-  ipv4Address = host.ipam.ipv4.address;
   serviceAddress = "10.1.11.10";
+  certName = "openbao-${host.hostname}";
+  nodeDnsName = "${host.hostname}.jort.haus";
+  apiDnsName = "openbao.jort.haus";
+  certDir = config.security.acme.certs.${certName}.directory;
 in
 {
   config = lib.mkIf enabled {
@@ -15,6 +18,13 @@ in
       };
 
       groups.openbao = { };
+    };
+
+    security.acme.certs.${certName} = {
+      domain = nodeDnsName;
+      extraDomainNames = [ apiDnsName ];
+      group = "openbao";
+      reloadServices = [ "openbao.service" ];
     };
 
     jorthaus.persistence.directories = [
@@ -36,7 +46,12 @@ in
     ];
 
     systemd.services.openbao = {
-      unitConfig.RequiresMountsFor = "/srv/openbao";
+      after = [ "acme-order-renew-${certName}.service" ];
+      wants = [ "acme-order-renew-${certName}.service" ];
+      unitConfig = {
+        RequiresMountsFor = "/srv/openbao";
+        ConditionPathExists = "${certDir}/fullchain.pem";
+      };
       serviceConfig = {
         DynamicUser = lib.mkForce false;
         User = lib.mkForce "openbao";
@@ -50,14 +65,15 @@ in
       settings = {
         ui = true;
 
-        # TODO: use dns records rather than ips for proper tls
-        api_addr = "https://${serviceAddress}:8200";
-        cluster_addr = "https://${ipv4Address}:8201";
+        api_addr = "https://${apiDnsName}:8200";
+        cluster_addr = "https://${nodeDnsName}:8201";
 
         listener.default = {
           type = "tcp";
           address = "[::]:8200";
           cluster_address = "[::]:8201";
+          tls_cert_file = "${certDir}/fullchain.pem";
+          tls_key_file = "${certDir}/key.pem";
         };
 
         storage.raft = {

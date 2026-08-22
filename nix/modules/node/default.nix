@@ -2,6 +2,8 @@ _:
 
 {
   imports = [
+    ./acme.nix
+    ./age.nix
     ./bird.nix
     ./boot.nix
     ./disko.nix

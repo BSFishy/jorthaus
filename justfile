@@ -25,3 +25,7 @@ plan-unifi:
 [working-directory: 'terraform/unifi']
 apply-unifi:
   tofu apply
+
+# create or edit an agenix-managed secret file
+secret-edit name:
+  agenix -e secrets/{{name}} -i "$HOME/.ssh/id_ed25519"

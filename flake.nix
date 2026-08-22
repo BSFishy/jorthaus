@@ -5,6 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     disko.url = "github:nix-community/disko";
+    agenix.url = "github:ryantm/agenix";
 
     impermanence = {
       url = "github:nix-community/impermanence";
@@ -16,7 +17,7 @@
   };
 
   outputs =
-    inputs@{ flake-parts, nixpkgs, ... }:
+    inputs@{ agenix, flake-parts, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
       hostInventory = import ./nix/hosts;
@@ -61,10 +62,11 @@
               just
               nil
               nixd
-              nixfmt-rfc-style
+              nixfmt-tree
               opentofu
               disko
               nixos-anywhere
+              agenix.packages.${system}.agenix
             ];
           };
         };
