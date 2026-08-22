@@ -11,6 +11,7 @@ in
   networking.useNetworkd = true;
 
   systemd.network.enable = true;
+  systemd.network.wait-online.extraArgs = [ "--interface=${ipam.interface}" ];
   services.resolved.enable = true;
 
   networking.nameservers = nameservers;
