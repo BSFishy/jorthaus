@@ -25,7 +25,21 @@
     }:
     let
       lib = nixpkgs.lib;
-      hostInventory = import ./nix/hosts;
+      rawHostInventory = import ./nix/hosts;
+      evalHost =
+        name:
+        (
+          lib.evalModules {
+            specialArgs = {
+              inherit name;
+            };
+            modules = [
+              ./nix/hosts/schema.nix
+              rawHostInventory.${name}
+            ];
+          }
+        ).config;
+      hostInventory = lib.mapAttrs (name: _: evalHost name) rawHostInventory;
       hostNames = builtins.attrNames hostInventory;
       mkHost =
         name:

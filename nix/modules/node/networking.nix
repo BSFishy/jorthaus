@@ -1,9 +1,8 @@
 { lib, host, ... }:
 let
   ipam = host.ipam;
-  ipv4 = ipam.ipv4 or null;
-  nameservers =
-    ipam.nameservers or (if ipv4 != null && ipv4 ? dnsServer then ipv4.dnsServer else [ ]);
+  ipv4 = ipam.ipv4;
+  nameservers = ipam.nameservers;
 in
 {
   networking.hostName = host.hostname;

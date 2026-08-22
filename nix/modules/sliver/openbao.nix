@@ -6,8 +6,7 @@
 }:
 
 let
-  cfg = host.slivers.openbao or { };
-  enabled = cfg.enable or false;
+  enabled = host.slivers.openbao.enable;
   serviceAddress = "10.1.11.10";
   certName = "openbao-${host.hostname}";
   nodeDnsName = "${host.hostname}.node.jort.haus";

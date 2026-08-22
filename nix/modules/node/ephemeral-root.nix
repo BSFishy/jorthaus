@@ -1,16 +1,16 @@
 { config, host, lib, utils, ... }:
 let
   root = host.disk.root;
-  btrfs = root.btrfs or { };
-  enabled = btrfs.enable or false;
-  useDisko = (host.install or { }) ? systemDisk;
-  mountDevice = if useDisko then config.fileSystems."/".device else btrfs.device or root.device;
+  btrfs = root.btrfs;
+  enabled = btrfs.enable;
+  useDisko = host.install.systemDisk != null;
+  mountDevice = if useDisko then config.fileSystems."/".device else root.device;
   mountDeviceUnit = "${utils.escapeSystemdPath mountDevice}.device";
-  rootSubvolume = btrfs.rootSubvolume or "root";
-  oldRootsSubvolume = btrfs.oldRootsSubvolume or "old_roots";
-  persistentSubvolume = btrfs.persistentSubvolume or "persistent";
-  nixSubvolume = btrfs.nixSubvolume or "nix";
-  oldRootsRetentionDays = toString (btrfs.oldRootsRetentionDays or 30);
+  rootSubvolume = btrfs.rootSubvolume;
+  oldRootsSubvolume = btrfs.oldRootsSubvolume;
+  persistentSubvolume = btrfs.persistentSubvolume;
+  nixSubvolume = btrfs.nixSubvolume;
+  oldRootsRetentionDays = toString btrfs.oldRootsRetentionDays;
 in
 {
   config = lib.mkIf enabled (

@@ -1,8 +1,8 @@
 { host, lib, ... }:
 let
   root = host.disk.root;
-  useBtrfsEphemeralRoot = root.btrfs.enable or false;
-  useDisko = (host.install or { }) ? systemDisk;
+  useBtrfsEphemeralRoot = root.btrfs.enable;
+  useDisko = host.install.systemDisk != null;
 in
 {
   hardware.facter.reportPath = host.facter;

@@ -5,15 +5,15 @@
   ...
 }:
 let
-  install = host.install or { };
-  systemDisk = install.systemDisk or null;
-  systemDiskDevice = systemDisk.device or null;
-  dataDisks = install.dataDisks or [ ];
-  useDisko = systemDiskDevice != null;
-  bootSize = systemDisk.bootSize or "1G";
-  swapSize = systemDisk.swapSize or "32G";
-  rootLabel = systemDisk.rootLabel or "nixos";
-  bootLabel = systemDisk.bootLabel or "BOOT";
+  install = host.install;
+  systemDisk = install.systemDisk;
+  dataDisks = install.dataDisks;
+  useDisko = systemDisk != null;
+  systemDiskDevice = if useDisko then systemDisk.device else null;
+  bootSize = if useDisko then systemDisk.bootSize else null;
+  swapSize = if useDisko then systemDisk.swapSize else null;
+  rootLabel = if useDisko then systemDisk.rootLabel else null;
+  bootLabel = if useDisko then systemDisk.bootLabel else null;
 
   mkDataDisk = dataDisk: {
     type = "disk";
@@ -24,14 +24,14 @@ let
         size = "100%";
         content = {
           type = "filesystem";
-          format = dataDisk.fsType or "xfs";
+          format = dataDisk.fsType;
           mountpoint = dataDisk.mountpoint;
           extraArgs = lib.optionals (dataDisk ? label) [
             "-L"
             dataDisk.label
           ];
         }
-        // lib.optionalAttrs (dataDisk ? mountOptions) {
+        // lib.optionalAttrs (dataDisk.mountOptions != null) {
           mountOptions = dataDisk.mountOptions;
         };
       };
