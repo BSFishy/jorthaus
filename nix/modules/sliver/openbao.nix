@@ -35,6 +35,13 @@ in
       reloadServices = [ "openbao.service" ];
     };
 
+    age.secrets.openbao-key-2026-08-23 = {
+      file = ../../../secrets/openbao-key-2026-08-23.age;
+      mode = "0700";
+      owner = "openbao";
+      group = "openbao";
+    };
+
     jorthaus.persistence.directories = [
       {
         directory = "/srv/openbao";
@@ -71,6 +78,7 @@ in
     services.openbao = {
       enable = true;
       settings = {
+        cluster_name = "jorthaus";
         ui = true;
 
         api_addr = "https://${externalApiDnsName}:8200";
@@ -87,6 +95,11 @@ in
         storage.raft = {
           node_id = host.hostname;
           path = "/srv/openbao";
+        };
+
+        seal.static = {
+          current_key_id = "openbao-key-2026-08-23";
+          current_key = "file://${config.age.secrets.openbao-key-2026-08-23.path}";
         };
       };
     };

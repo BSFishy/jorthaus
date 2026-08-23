@@ -83,6 +83,7 @@
               opentofu
               disko
               nixos-anywhere
+              openbao
               agenix.packages.${system}.agenix
             ];
           };

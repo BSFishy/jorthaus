@@ -33,3 +33,9 @@ secret-edit name:
 # re-encrypts all secrets with specified recipients
 secret-rekey:
   agenix -r -i "$HOME/.ssh/id_ed25519"
+
+# generate & encrypt new openbao unsealing key
+[script]
+openbao-key name:
+  tmp=$(printf %s "$(nix-shell -p openssl --run 'openssl rand -hex 32')")
+  printf %s "$tmp" | agenix -e secrets/{{name}}
