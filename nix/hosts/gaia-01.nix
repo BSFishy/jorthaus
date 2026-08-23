@@ -3,6 +3,10 @@
   system = "x86_64-linux";
   facter = ./gaia-01-facter.json;
 
+  slivers = {
+    openbao.enable = true;
+  };
+
   ipam = {
     interface = "enp1s0";
     nameservers = [ "10.1.0.1" ];

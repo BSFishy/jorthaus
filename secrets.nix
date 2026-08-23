@@ -14,5 +14,5 @@ let
 in
 {
   "secrets/acme-vars.age".publicKeys = all;
-  "secrets/openbao-key-2026-08-23.age".publicKeys = [ matt gaia-02 ];
+  "secrets/openbao-key-2026-08-23.age".publicKeys = [ matt gaia-01 gaia-02 gaia-03 ];
 }

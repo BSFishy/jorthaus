@@ -1,6 +1,7 @@
 {
   config,
   host,
+  hostInventory,
   lib,
   ...
 }:
@@ -13,6 +14,12 @@ let
   internalApiDnsName = "openbao.service.jort.haus";
   externalApiDnsName = "openbao.jort.haus";
   certDir = config.security.acme.certs.${certName}.directory;
+  openbaoPeerHosts = lib.filter (
+    peer: peer.hostname != host.hostname && peer.slivers.openbao.enable
+  ) (builtins.attrValues hostInventory);
+  retryJoin = map (peer: {
+    leader_api_addr = "https://${peer.hostname}.node.jort.haus:8200";
+  }) openbaoPeerHosts;
 in
 {
   config = lib.mkIf enabled {
@@ -95,6 +102,7 @@ in
         storage.raft = {
           node_id = host.hostname;
           path = "/srv/openbao";
+          retry_join = retryJoin;
         };
 
         seal.static = {

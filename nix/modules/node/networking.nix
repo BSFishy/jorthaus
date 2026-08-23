@@ -17,10 +17,20 @@ in
 
   systemd.network.networks."10-uplink" = {
     matchConfig.Name = ipam.interface;
-    networkConfig.DHCP = "no";
     address = lib.optional (ipv4 != null) "${ipv4.address}/${toString ipv4.prefixLength}";
+    dns = nameservers;
     routes = lib.optional (ipv4 != null && ipv4 ? gateway) {
       Gateway = ipv4.gateway;
+    };
+
+    networkConfig = {
+      DHCP = "no";
+      DNSDefaultRoute = false;
+    };
+
+    ipv6AcceptRAConfig = {
+      UseDNS = false;
+      UseDomains = false;
     };
   };
 }
