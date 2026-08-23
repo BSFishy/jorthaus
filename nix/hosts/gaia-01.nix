@@ -6,6 +6,7 @@
   slivers = {
     etcd.enable = true;
     openbao.enable = true;
+    postgres.enable = true;
   };
 
   ipam = {
