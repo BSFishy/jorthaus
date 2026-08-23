@@ -23,6 +23,7 @@ in
       description = "Path to the nixos-facter report for this node.";
     };
 
+    slivers.etcd.enable = mkEnableOption "the etcd sliver";
     slivers.openbao.enable = mkEnableOption "the OpenBao sliver";
 
     ipam = {

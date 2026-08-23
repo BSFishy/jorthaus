@@ -4,6 +4,7 @@
   facter = ./gaia-01-facter.json;
 
   slivers = {
+    etcd.enable = true;
     openbao.enable = true;
   };
 

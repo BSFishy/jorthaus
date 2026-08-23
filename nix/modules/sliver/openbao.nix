@@ -60,8 +60,6 @@ in
 
     jorthaus.routing.loopbackAddresses = [ "${serviceAddress}/32" ];
 
-    # TODO: currently not accepting connections on port 8201. need to look into
-    # that.
     networking.firewall.allowedTCPPorts = [
       8200
       8201
@@ -85,7 +83,7 @@ in
     services.openbao = {
       enable = true;
       settings = {
-        cluster_name = "jorthaus";
+        cluster_name = "jorthaus-openbao";
         ui = true;
 
         api_addr = "https://${externalApiDnsName}:8200";

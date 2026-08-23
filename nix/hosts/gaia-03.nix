@@ -5,6 +5,7 @@
 
   slivers = {
     openbao.enable = true;
+    etcd.enable = true;
   };
 
   ipam = {
