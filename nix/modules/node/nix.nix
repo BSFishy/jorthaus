@@ -14,4 +14,9 @@ _:
     "nix-command"
     "flakes"
   ];
+
+  programs.nh = {
+    enable = true;
+    clean.enable = true;
+  };
 }
