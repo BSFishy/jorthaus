@@ -13,8 +13,12 @@ let
   restApiPort = 8008;
   postgresPort = 5432;
   postgresNetwork = "10.1.0.0/16";
+  serviceAddress = "10.1.11.11";
   patroniDataDir = "/srv/patroni";
   postgresDataDir = "/srv/postgres/${pkgs.postgresql.psqlSchema}";
+  postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
+  );
   etcdHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.etcd.enable) (builtins.attrValues hostInventory)
   );
@@ -23,6 +27,8 @@ let
   );
 in
 {
+  # TODO: tls
+  # TODO: sync replication
   config = lib.mkIf enabled {
     assertions = [
       {
@@ -76,6 +82,26 @@ in
         RuntimeDirectory = "postgresql";
         RuntimeDirectoryMode = "0755";
       };
+    };
+
+    jorthaus.haproxy.services.postgres-rw = {
+      enable = true;
+      address = serviceAddress;
+      port = postgresPort;
+      mode = "tcp";
+      backendConfig = ''
+        option httpchk GET /primary
+        http-check expect status 200
+        default-server on-marked-down shutdown-sessions
+      '';
+      backends = map (peer: {
+        name = peer.hostname;
+        address = peer.ipam.ipv4.address;
+        port = postgresPort;
+        options = "check port ${toString restApiPort} inter 2s fall 2 rise 1";
+      }) postgresHosts;
+      after = [ "patroni.service" ];
+      wants = [ "patroni.service" ];
     };
 
     services.patroni = {
@@ -140,6 +166,7 @@ in
           pg_hba = [
             "local all all peer"
             "host all all 127.0.0.1/32 scram-sha-256"
+            "host replication replicator 127.0.0.1/32 scram-sha-256"
             "host replication replicator ${postgresNetwork} scram-sha-256"
             "host all all ${postgresNetwork} scram-sha-256"
           ];

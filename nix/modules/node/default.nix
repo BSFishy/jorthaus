@@ -9,6 +9,7 @@ _:
     ./disko.nix
     ./ephemeral-root.nix
     ./hardware.nix
+    ./haproxy.nix
     ./impermanence.nix
     ./locale.nix
     ./networking.nix
