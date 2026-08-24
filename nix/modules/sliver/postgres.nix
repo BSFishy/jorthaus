@@ -90,8 +90,14 @@ in
     ];
 
     systemd.services.patroni = {
-      after = [ "network-online.target" "acme-order-renew-${certName}.service" ];
-      wants = [ "network-online.target" "acme-order-renew-${certName}.service" ];
+      after = [
+        "network-online.target"
+        "acme-order-renew-${certName}.service"
+      ];
+      wants = [
+        "network-online.target"
+        "acme-order-renew-${certName}.service"
+      ];
       unitConfig = {
         RequiresMountsFor = [
           patroniDataDir
