@@ -52,6 +52,9 @@ let
   '';
 in
 {
+  # TODO: etcd config kinda sucks and i dont really like running it with all
+  # this extra machinery around it. currently its only used by patroni. i wanna
+  # look into replacing it with consul or zookeeper or similar
   config = lib.mkIf enabled {
     jorthaus.persistence.directories = [
       {
