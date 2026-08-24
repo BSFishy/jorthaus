@@ -153,5 +153,6 @@ in
 
     systemd.services.haproxy.after = [ "network-online.target" ] ++ unique (flatten (mapAttrsToList (_: service: service.after) enabledServices));
     systemd.services.haproxy.wants = [ "network-online.target" ] ++ unique (flatten (mapAttrsToList (_: service: service.wants) enabledServices));
+    systemd.services.haproxy.restartTriggers = [ config.environment.etc."haproxy.cfg".source ];
   };
 }

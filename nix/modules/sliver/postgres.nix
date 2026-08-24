@@ -16,6 +16,14 @@ let
   serviceAddress = "10.1.11.11";
   patroniDataDir = "/srv/patroni";
   postgresDataDir = "/srv/postgres/${pkgs.postgresql.psqlSchema}";
+  certName = "postgres-${host.hostname}";
+  nodeDnsName = "${host.hostname}.node.jort.haus";
+  serviceDnsName = "postgres.service.jort.haus";
+  certDir = config.security.acme.certs.${certName}.directory;
+  tlsDir = "${patroniDataDir}/tls";
+  stagedCertFile = "${tlsDir}/fullchain.pem";
+  stagedKeyFile = "${tlsDir}/key.pem";
+  caFile = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
   );
@@ -27,7 +35,6 @@ let
   );
 in
 {
-  # TODO: tls
   # TODO: sync replication
   config = lib.mkIf enabled {
     assertions = [
@@ -36,6 +43,13 @@ in
         message = "The postgres sliver requires at least one enabled etcd node.";
       }
     ];
+
+    security.acme.certs.${certName} = {
+      domain = nodeDnsName;
+      extraDomainNames = [ serviceDnsName ];
+      group = "patroni";
+      reloadServices = [ "patroni.service" ];
+    };
 
     age.secrets.patroni-postgres-superuser-password = {
       file = ../../../secrets/patroni-postgres-superuser-password.age;
@@ -66,18 +80,30 @@ in
       }
     ];
 
+    systemd.tmpfiles.rules = [
+      "d ${tlsDir} 0700 patroni patroni -"
+    ];
+
     networking.firewall.allowedTCPPorts = [
       postgresPort
       restApiPort
     ];
 
     systemd.services.patroni = {
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      unitConfig.RequiresMountsFor = [
-        patroniDataDir
-        postgresDataDir
-      ];
+      after = [ "network-online.target" "acme-order-renew-${certName}.service" ];
+      wants = [ "network-online.target" "acme-order-renew-${certName}.service" ];
+      unitConfig = {
+        RequiresMountsFor = [
+          patroniDataDir
+          postgresDataDir
+        ];
+        ConditionPathExists = "${certDir}/fullchain.pem";
+      };
+      preStart = ''
+        install -d -m 0700 -o patroni -g patroni ${tlsDir}
+        install -m 0644 -o patroni -g patroni ${certDir}/fullchain.pem ${stagedCertFile}
+        install -m 0400 -o patroni -g patroni ${certDir}/key.pem ${stagedKeyFile}
+      '';
       serviceConfig = {
         RuntimeDirectory = "postgresql";
         RuntimeDirectoryMode = "0755";
@@ -96,9 +122,9 @@ in
       '';
       backends = map (peer: {
         name = peer.hostname;
-        address = peer.ipam.ipv4.address;
+        address = "${peer.hostname}.node.jort.haus";
         port = postgresPort;
-        options = "check port ${toString restApiPort} inter 2s fall 2 rise 1";
+        options = "check port ${toString restApiPort} check-ssl verify required ca-file ${caFile} verifyhost ${peer.hostname}.node.jort.haus sni str(${peer.hostname}.node.jort.haus) inter 2s fall 2 rise 1";
       }) postgresHosts;
       after = [ "patroni.service" ];
       wants = [ "patroni.service" ];
@@ -122,6 +148,23 @@ in
       };
 
       settings = {
+        restapi = {
+          listen = lib.mkForce "${host.ipam.ipv4.address}:${toString restApiPort}";
+          connect_address = lib.mkForce "${nodeDnsName}:${toString restApiPort}";
+          certfile = stagedCertFile;
+          keyfile = stagedKeyFile;
+          cafile = caFile;
+        };
+
+        postgresql = {
+          listen = lib.mkForce "${host.ipam.ipv4.address}:${toString postgresPort}";
+          connect_address = lib.mkForce "${nodeDnsName}:${toString postgresPort}";
+        };
+
+        ctl = {
+          cacert = caFile;
+        };
+
         etcd3 = {
           protocol = "https";
           hosts = etcdHostsConfig;
@@ -154,21 +197,30 @@ in
         };
 
         postgresql = {
+          use_unix_socket = true;
+          use_unix_socket_repl = true;
+
           authentication = {
             superuser.username = "postgres";
-            replication.username = "replicator";
+            replication = {
+              username = "replicator";
+              sslmode = "verify-full";
+              sslrootcert = caFile;
+            };
           };
 
           parameters = {
             unix_socket_directories = "/run/postgresql";
+            ssl = "on";
+            ssl_cert_file = stagedCertFile;
+            ssl_key_file = stagedKeyFile;
           };
 
           pg_hba = [
-            "local all all peer"
-            "host all all 127.0.0.1/32 scram-sha-256"
-            "host replication replicator 127.0.0.1/32 scram-sha-256"
-            "host replication replicator ${postgresNetwork} scram-sha-256"
-            "host all all ${postgresNetwork} scram-sha-256"
+            "local all all scram-sha-256"
+            "local replication replicator scram-sha-256"
+            "hostssl replication replicator ${postgresNetwork} scram-sha-256"
+            "hostssl all all ${postgresNetwork} scram-sha-256"
           ];
         };
       };
