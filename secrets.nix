@@ -28,6 +28,8 @@ in
 {
   "secrets/acme-vars.age".publicKeys = all;
   "secrets/openbao-key-2026-08-23.age".publicKeys = openbao-hosts;
+
   "secrets/patroni-postgres-superuser-password.age".publicKeys = postgres-hosts;
   "secrets/patroni-postgres-replication-password.age".publicKeys = postgres-hosts;
+  "secrets/pgbackrest-b2-env.age".publicKeys = postgres-hosts;
 }

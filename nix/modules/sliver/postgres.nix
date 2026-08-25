@@ -24,6 +24,24 @@ let
   stagedCertFile = "${tlsDir}/fullchain.pem";
   stagedKeyFile = "${tlsDir}/key.pem";
   caFile = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+  backupSecretName = "pgbackrest-b2-env";
+  backupStanza = patroniScope;
+  backupRepoName = "b2";
+  backupRepoPath = "/jorthaus-postgres";
+  backupSpoolDir = "/srv/pgbackrest/spool";
+  backupHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
+  );
+  backupHost = lib.head backupHosts;
+  backupEnvFile = config.age.secrets.${backupSecretName}.path;
+  pgbackrestWrapper = pkgs.writeShellScriptBin "jorthaus-pgbackrest" ''
+    set -eu
+    set -a
+    . ${backupEnvFile}
+    set +a
+    export PGPASSWORD="$(tr -d '\n' < ${config.age.secrets.patroni-postgres-superuser-password.path})"
+    exec ${lib.getExe pkgs.pgbackrest} "$@"
+  '';
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
   );
@@ -65,6 +83,13 @@ in
       mode = "0400";
     };
 
+    age.secrets.${backupSecretName} = {
+      file = ../../../secrets/pgbackrest-b2-env.age;
+      owner = "patroni";
+      group = "pgbackrest";
+      mode = "0440";
+    };
+
     jorthaus.persistence.directories = [
       {
         directory = patroniDataDir;
@@ -78,10 +103,18 @@ in
         group = "patroni";
         mode = "0700";
       }
+      {
+        directory = "/srv/pgbackrest";
+        user = "patroni";
+        group = "patroni";
+        mode = "0700";
+      }
     ];
 
     systemd.tmpfiles.rules = [
       "d ${tlsDir} 0700 patroni patroni -"
+      "d /run/pgbackrest 0700 patroni patroni -"
+      "d ${backupSpoolDir} 0700 patroni patroni -"
     ];
 
     networking.firewall.allowedTCPPorts = [
@@ -134,6 +167,110 @@ in
       }) postgresHosts;
       after = [ "patroni.service" ];
       wants = [ "patroni.service" ];
+    };
+
+    # TODO: move pgbackrest to kubernetes once its running
+    services.pgbackrest = {
+      enable = true;
+      settings = {
+        lock-path = "/run/pgbackrest";
+        spool-path = backupSpoolDir;
+        start-fast = true;
+        compress-type = "zst";
+        process-max = 2;
+      };
+      repos.${backupRepoName} = {
+        type = "s3";
+        path = backupRepoPath;
+        s3-uri-style = "path";
+        retention-full = 2;
+        retention-diff = 6;
+        retention-archive = 2;
+        retention-archive-type = "full";
+      };
+      stanzas.${backupStanza} = {
+        instances.localhost = {
+          path = postgresDataDir;
+          port = postgresPort;
+          socket-path = "/run/postgresql";
+          user = "postgres";
+        };
+        settings = {
+          archive-check = true;
+        };
+      };
+    };
+
+    environment.systemPackages = [ pgbackrestWrapper ];
+
+    users.users.patroni.extraGroups = [ "pgbackrest" ];
+
+    systemd.services.jorthaus-pgbackrest-check = {
+      description = "Check pgBackRest stanza ${backupStanza}";
+      after = [ "network-online.target" "patroni.service" ];
+      wants = [ "network-online.target" "patroni.service" ];
+      unitConfig.RequiresMountsFor = [ postgresDataDir "/srv/pgbackrest" ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "patroni";
+        Group = "patroni";
+      };
+      script = ''
+        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} stanza-create
+        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} check
+      '';
+    };
+
+    systemd.services.jorthaus-pgbackrest-backup-full = lib.mkIf (host.hostname == backupHost.hostname) {
+      description = "Run full pgBackRest backup for ${backupStanza}";
+      after = [ "network-online.target" "patroni.service" ];
+      wants = [ "network-online.target" "patroni.service" ];
+      unitConfig.RequiresMountsFor = [ postgresDataDir "/srv/pgbackrest" ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "patroni";
+        Group = "patroni";
+      };
+      script = ''
+        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} stanza-create
+        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} backup --type=full
+      '';
+    };
+
+    systemd.services.jorthaus-pgbackrest-backup-diff = lib.mkIf (host.hostname == backupHost.hostname) {
+      description = "Run differential pgBackRest backup for ${backupStanza}";
+      after = [ "network-online.target" "patroni.service" ];
+      wants = [ "network-online.target" "patroni.service" ];
+      unitConfig.RequiresMountsFor = [ postgresDataDir "/srv/pgbackrest" ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "patroni";
+        Group = "patroni";
+      };
+      script = ''
+        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} stanza-create
+        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} backup --type=diff
+      '';
+    };
+
+    systemd.timers.jorthaus-pgbackrest-backup-full = lib.mkIf (host.hostname == backupHost.hostname) {
+      description = "Weekly full pgBackRest backup for ${backupStanza}";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "Sun *-*-* 03:15:00 UTC";
+        Persistent = true;
+        Unit = "jorthaus-pgbackrest-backup-full.service";
+      };
+    };
+
+    systemd.timers.jorthaus-pgbackrest-backup-diff = lib.mkIf (host.hostname == backupHost.hostname) {
+      description = "Daily differential pgBackRest backup for ${backupStanza}";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "Mon..Sat *-*-* 03:15:00 UTC";
+        Persistent = true;
+        Unit = "jorthaus-pgbackrest-backup-diff.service";
+      };
     };
 
     services.patroni = {
@@ -195,6 +332,9 @@ in
                 max_replication_slots = 10;
                 wal_log_hints = "on";
                 password_encryption = "scram-sha-256";
+                archive_mode = "on";
+                archive_timeout = "60s";
+                archive_command = "${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} archive-push %p";
               };
             };
           };
@@ -223,6 +363,9 @@ in
             ssl = "on";
             ssl_cert_file = stagedCertFile;
             ssl_key_file = stagedKeyFile;
+            archive_mode = "on";
+            archive_timeout = "60s";
+            archive_command = "${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} archive-push %p";
           };
 
           pg_hba = [
