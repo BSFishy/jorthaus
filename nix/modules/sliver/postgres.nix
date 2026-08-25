@@ -53,7 +53,6 @@ let
   );
 in
 {
-  # TODO: sync replication
   config = lib.mkIf enabled {
     assertions = [
       {
