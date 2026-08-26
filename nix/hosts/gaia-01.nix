@@ -7,6 +7,7 @@
     etcd.enable = true;
     openbao.enable = true;
     postgres.enable = true;
+    valkey.enable = true;
   };
 
   ipam = {

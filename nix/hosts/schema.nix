@@ -26,6 +26,7 @@ in
     slivers.etcd.enable = mkEnableOption "the etcd sliver";
     slivers.openbao.enable = mkEnableOption "the OpenBao sliver";
     slivers.postgres.enable = mkEnableOption "the Patroni/Postgres sliver";
+    slivers.valkey.enable = mkEnableOption "the Valkey sliver";
 
     ipam = {
       interface = mkOption {

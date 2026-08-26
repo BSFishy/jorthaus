@@ -16,6 +16,9 @@ let
   cfg = config.jorthaus.haproxy;
 
   enabledServices = lib.filterAttrs (_: service: service.enable) cfg.services;
+  renderedGlobalConfig = lib.concatMapStringsSep "\n" (line: "  ${line}") (
+    lib.filter (line: line != "") (lib.splitString "\n" cfg.globalConfig)
+  );
 
   renderServer =
     server:
@@ -47,6 +50,12 @@ let
 in
 {
   options.jorthaus.haproxy = {
+    globalConfig = mkOption {
+      type = types.lines;
+      default = "";
+      description = "Additional HAProxy directives inserted into the global stanza.";
+    };
+
     services = mkOption {
       default = { };
       type = types.attrsOf (
@@ -151,10 +160,12 @@ in
     services.haproxy = {
       enable = true;
       config = ''
-          defaults
-            timeout connect 5s
-            timeout client 1m
-            timeout server 1m
+        ${optionalString (cfg.globalConfig != "") renderedGlobalConfig}
+
+        defaults
+          timeout connect 5s
+          timeout client 1m
+          timeout server 1m
 
         ${concatMapStringsSep "\n" (name: renderService name enabledServices.${name}) (
           builtins.attrNames enabledServices

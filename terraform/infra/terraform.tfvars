@@ -8,6 +8,7 @@ dns_hosts = {
   "gaia-03.node" = "10.1.10.3"
   "openbao.service" = "10.1.11.10"
   "postgres.service" = "10.1.11.11"
+  "valkey.service" = "10.1.11.12"
 }
 
 frr_enable      = true
