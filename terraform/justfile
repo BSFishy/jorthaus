@@ -1,0 +1,23 @@
+# plan terraform changes for infra
+[group('terraform')]
+[working-directory: 'terraform/infra']
+plan-infra:
+  tofu plan
+
+# apply terraform changes for infra
+[group('terraform')]
+[working-directory: 'terraform/infra']
+apply-infra:
+  tofu apply
+
+# plan terraform changes for system
+[group('terraform')]
+[working-directory: 'terraform/system']
+plan-system:
+  tofu plan
+
+# apply terraform changes for system
+[group('terraform')]
+[working-directory: 'terraform/system']
+apply-system:
+  tofu apply
