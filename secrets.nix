@@ -23,6 +23,12 @@ let
     gaia-02
     gaia-03
   ];
+  seaweedfs-hosts = [
+    matt
+    gaia-01
+    gaia-02
+    gaia-03
+  ];
 
   all-nodes = [
     gaia-01
@@ -39,4 +45,6 @@ in
   "secrets/patroni-postgres-replication-password.age".publicKeys = postgres-hosts;
   "secrets/pgbackrest-b2-env.age".publicKeys = postgres-hosts;
   "secrets/valkey-password.age".publicKeys = valkey-hosts;
+  "secrets/seaweedfs-approle-role-id.age".publicKeys = seaweedfs-hosts;
+  "secrets/seaweedfs-approle-secret-id.age".publicKeys = seaweedfs-hosts;
 }

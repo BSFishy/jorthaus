@@ -20,3 +20,15 @@ resource "vault_database_secret_backend_connection" "postgres" {
     max_connection_lifetime = 300
   }
 }
+
+resource "vault_database_secret_backend_static_role" "seaweedfs" {
+  backend         = vault_mount.postgres.path
+  name            = "seaweedfs"
+  db_name         = vault_database_secret_backend_connection.postgres.name
+  username        = "seaweedfs"
+  rotation_period = 2592000
+
+  rotation_statements = [
+    "ALTER ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}';"
+  ]
+}

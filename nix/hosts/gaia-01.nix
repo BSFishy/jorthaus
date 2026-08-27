@@ -8,6 +8,7 @@
     openbao.enable = true;
     postgres.enable = true;
     valkey.enable = true;
+    seaweedfs.enable = true;
   };
 
   ipam = {
