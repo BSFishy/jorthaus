@@ -125,6 +125,49 @@ in
       };
     };
 
+    filer = {
+      masters = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = lib.concatStringsSep "," (
+          map (peer: "${peer.hostname}.node.jort.haus:${toString config.jorthaus.seaweedfs.master.port}") controlplaneHosts
+        );
+        description = "Comma-separated SeaweedFS controlplane master list for filers.";
+      };
+
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 8888;
+        description = "SeaweedFS filer HTTP port.";
+      };
+
+      grpcPort = lib.mkOption {
+        type = lib.types.port;
+        default = 18888;
+        description = "SeaweedFS filer gRPC port.";
+      };
+
+      dir = lib.mkOption {
+        type = lib.types.str;
+        default = "/srv/seaweedfs/filer";
+        description = "SeaweedFS filer local state directory.";
+      };
+
+      tomlPath = lib.mkOption {
+        type = lib.types.str;
+        default = "/run/seaweedfs-filer/filer.toml";
+        description = "Rendered SeaweedFS filer configuration path.";
+      };
+    };
+
+    s3 = {
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 8333;
+        description = "SeaweedFS S3 HTTP port.";
+      };
+    };
+
     volume = {
       masters = lib.mkOption {
         type = lib.types.str;

@@ -11,16 +11,72 @@ let
   secretIdSecretName = "seaweedfs-approle-secret-id";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
+  filerAgentDir = "/run/seaweedfs-agent-filer";
   filerRuntimeDir = "/run/seaweedfs-filer";
-  credsFile = "${filerRuntimeDir}/postgres.env";
+  filerConfigDir = "${filerRuntimeDir}/.seaweedfs";
+  filerTomlPath = "${filerConfigDir}/filer.toml";
+  credsFile = "${filerAgentDir}/postgres.env";
   restartHelper = pkgs.writeShellScript "jorthaus-seaweedfs-credential-refresh" ''
     set -eu
 
-    for unit in seaweedfs-filer.service seaweedfs-s3.service; do
+    for unit in seaweedfs-filer.service; do
       if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
         systemctl try-restart "$unit"
       fi
     done
+  '';
+  renderFilerToml = pkgs.writeShellScript "jorthaus-seaweedfs-render-filer-toml" ''
+    set -eu
+
+    for _ in $(seq 1 30); do
+      if [ -f ${credsFile} ]; then
+        break
+      fi
+      sleep 1
+    done
+
+    [ -f ${credsFile} ]
+    . ${credsFile}
+
+    install -d -o seaweedfs-filer -g seaweedfs -m 0750 ${cfg.filer.dir}
+    install -d -o seaweedfs-filer -g seaweedfs -m 0750 ${filerRuntimeDir}
+    install -d -o seaweedfs-filer -g seaweedfs -m 0750 ${filerConfigDir}
+
+    cat > ${filerTomlPath} <<EOF
+    [filer.options]
+    recursive_delete = false
+
+    [postgres2]
+    enabled = true
+    createTable = """
+      CREATE TABLE IF NOT EXISTS "%s" (
+        dirhash   BIGINT,
+        name      VARCHAR(65535) COLLATE "C",
+        directory VARCHAR(65535),
+        meta      bytea,
+        PRIMARY KEY (dirhash, name)
+      );
+    """
+    hostname = "$PGHOST"
+    port = $PGPORT
+    username = "$PGUSER"
+    password = "$PGPASSWORD"
+    database = "$PGDATABASE"
+    schema = "public"
+    sslmode = "$PGSSLMODE"
+    sslrootcert = "$PGSSLROOTCERT"
+    enableUpsert = true
+    upsertQuery = """
+      INSERT INTO "%[1]s" (dirhash, name, directory, meta)
+        VALUES(\$1, \$2, \$3, \$4)
+        ON CONFLICT (dirhash, name) DO UPDATE SET
+          directory=EXCLUDED.directory,
+          meta=EXCLUDED.meta
+    """
+    EOF
+
+    chown seaweedfs-filer:seaweedfs ${filerTomlPath}
+    chmod 0400 ${filerTomlPath}
   '';
   postgresBootstrap = pkgs.writeShellScript "jorthaus-seaweedfs-postgres-bootstrap" ''
     set -eu
@@ -104,15 +160,25 @@ in
         group = "seaweedfs";
         mode = "0750";
       }
+      {
+        directory = cfg.filer.dir;
+        user = "seaweedfs-filer";
+        group = "seaweedfs";
+        mode = "0750";
+      }
     ];
 
     systemd.tmpfiles.rules = [
-      "d ${filerRuntimeDir} 0750 seaweedfs-filer seaweedfs -"
+      "d ${filerAgentDir} 0750 seaweedfs-filer seaweedfs -"
+      "d ${filerConfigDir} 0750 seaweedfs-filer seaweedfs -"
     ];
 
     networking.firewall.allowedTCPPorts = [
       cfg.master.port
       cfg.master.grpcPort
+      cfg.filer.port
+      cfg.filer.grpcPort
+      cfg.s3.port
     ];
 
     environment.systemPackages = [
@@ -125,7 +191,7 @@ in
       user = "seaweedfs-filer";
       group = "seaweedfs";
       settings = {
-        pid_file = "${filerRuntimeDir}/vault-agent.pid";
+        pid_file = "${filerAgentDir}/vault-agent.pid";
 
         vault = {
           address = "https://openbao.service.jort.haus:8200";
@@ -150,7 +216,7 @@ in
               {
                 type = "file";
                 config = {
-                  path = "${filerRuntimeDir}/openbao.token";
+                  path = "${filerAgentDir}/openbao.token";
                   mode = 256;
                 };
               }
@@ -208,6 +274,44 @@ in
       };
     };
 
+    systemd.services.seaweedfs-filer = {
+      description = "SeaweedFS filer and S3 gateway";
+      wantedBy = [ "multi-user.target" ];
+      after = [
+        "network-online.target"
+        "vault-agent-seaweedfs.service"
+      ];
+      wants = [
+        "network-online.target"
+        "vault-agent-seaweedfs.service"
+      ];
+      unitConfig.RequiresMountsFor = [ cfg.filer.dir ];
+      serviceConfig = {
+        User = "seaweedfs-filer";
+        Group = "seaweedfs";
+        Environment = [ "HOME=${filerRuntimeDir}" ];
+        ExecStartPre = renderFilerToml;
+        ExecStart = lib.escapeShellArgs [
+          (lib.getExe' pkgs.seaweedfs "weed")
+          "filer"
+          "-master=${cfg.filer.masters}"
+          "-ip=${host.hostname}.node.jort.haus"
+          "-ip.bind=${host.ipam.ipv4.address}"
+          "-port=${toString cfg.filer.port}"
+          "-port.grpc=${toString cfg.filer.grpcPort}"
+          "-defaultStoreDir=${cfg.filer.dir}"
+          "-s3"
+          "-s3.port=${toString cfg.s3.port}"
+          "-s3.ip.bind=${host.ipam.ipv4.address}"
+          "-metricsIp=${host.ipam.ipv4.address}"
+        ];
+        Restart = "on-failure";
+        RuntimeDirectory = "seaweedfs-filer";
+        RuntimeDirectoryMode = "0750";
+        WorkingDirectory = filerRuntimeDir;
+      };
+    };
+
     systemd.services.vault-agent-seaweedfs = {
       after = [
         "network-online.target"
@@ -218,7 +322,7 @@ in
         "agenix.service"
       ];
       serviceConfig = {
-        RuntimeDirectory = lib.mkForce "seaweedfs-filer";
+        RuntimeDirectory = lib.mkForce "seaweedfs-agent-filer";
         RuntimeDirectoryMode = lib.mkForce "0750";
       };
     };
