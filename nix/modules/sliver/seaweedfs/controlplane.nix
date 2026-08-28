@@ -16,6 +16,7 @@ let
   filerRuntimeDir = "/run/seaweedfs-filer";
   filerConfigDir = "${filerRuntimeDir}/.seaweedfs";
   filerTomlPath = "${filerConfigDir}/filer.toml";
+  filerSecurityTomlPath = "${filerConfigDir}/security.toml";
   credsFile = "${filerAgentDir}/postgres.env";
   s3ConfigFile = "${filerAgentDir}/s3.json";
   certName = "seaweedfs-${host.hostname}";
@@ -80,8 +81,22 @@ let
     """
     EOF
 
-    chown seaweedfs-filer:seaweedfs ${filerTomlPath}
-    chmod 0400 ${filerTomlPath}
+    cat > ${filerSecurityTomlPath} <<EOF
+    [cors.allowed_origins]
+    values = "*"
+
+    [https.master]
+    cert = "${certDir}/fullchain.pem"
+    key = "${certDir}/key.pem"
+
+    [https.filer]
+    cert = "${certDir}/fullchain.pem"
+    key = "${certDir}/key.pem"
+    disable_tls_verify_client_cert = true
+    EOF
+
+    chown seaweedfs-filer:seaweedfs ${filerTomlPath} ${filerSecurityTomlPath}
+    chmod 0400 ${filerTomlPath} ${filerSecurityTomlPath}
   '';
   postgresBootstrap = pkgs.writeShellScript "jorthaus-seaweedfs-postgres-bootstrap" ''
     set -eu
@@ -172,6 +187,20 @@ in
         "seaweedfs-filer.service"
       ];
     };
+
+    environment.etc."seaweedfs/security.toml".text = ''
+      [cors.allowed_origins]
+      values = "*"
+
+      [https.master]
+      cert = "${certDir}/fullchain.pem"
+      key = "${certDir}/key.pem"
+
+      [https.filer]
+      cert = "${certDir}/fullchain.pem"
+      key = "${certDir}/key.pem"
+      disable_tls_verify_client_cert = true
+    '';
 
     jorthaus.persistence.directories = [
       {
@@ -295,9 +324,18 @@ in
     systemd.services.seaweedfs-master = {
       description = "SeaweedFS master";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      unitConfig.RequiresMountsFor = [ cfg.master.dir ];
+      after = [
+        "network-online.target"
+        "acme-order-renew-${certName}.service"
+      ];
+      wants = [
+        "network-online.target"
+        "acme-order-renew-${certName}.service"
+      ];
+      unitConfig = {
+        RequiresMountsFor = [ cfg.master.dir ];
+        ConditionPathExists = "${certDir}/fullchain.pem";
+      };
       serviceConfig = {
         User = "seaweedfs-master";
         Group = "seaweedfs";
