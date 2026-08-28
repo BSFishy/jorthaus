@@ -9,6 +9,9 @@ dns_hosts = {
   "openbao.service" = "10.1.11.10"
   "postgres.service" = "10.1.11.11"
   "valkey.service" = "10.1.11.12"
+  "seaweed-master.service" = "10.1.11.13"
+  "seaweed-filer.service" = "10.1.11.14"
+  "s3.service" = "10.1.11.15"
 }
 
 frr_enable      = true

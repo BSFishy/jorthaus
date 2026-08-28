@@ -91,6 +91,18 @@ in
     };
 
     master = {
+      address = lib.mkOption {
+        type = lib.types.str;
+        default = "10.1.11.13";
+        description = "SeaweedFS master anycast IPv4 address.";
+      };
+
+      dnsName = lib.mkOption {
+        type = lib.types.str;
+        default = "seaweed-master.service.jort.haus";
+        description = "SeaweedFS master anycast DNS name.";
+      };
+
       port = lib.mkOption {
         type = lib.types.port;
         default = 9333;
@@ -126,6 +138,18 @@ in
     };
 
     filer = {
+      address = lib.mkOption {
+        type = lib.types.str;
+        default = "10.1.11.14";
+        description = "SeaweedFS filer anycast IPv4 address.";
+      };
+
+      dnsName = lib.mkOption {
+        type = lib.types.str;
+        default = "seaweed-filer.service.jort.haus";
+        description = "SeaweedFS filer anycast DNS name.";
+      };
+
       masters = lib.mkOption {
         type = lib.types.str;
         readOnly = true;
@@ -161,6 +185,18 @@ in
     };
 
     s3 = {
+      address = lib.mkOption {
+        type = lib.types.str;
+        default = "10.1.11.15";
+        description = "SeaweedFS S3 anycast IPv4 address.";
+      };
+
+      dnsName = lib.mkOption {
+        type = lib.types.str;
+        default = "s3.service.jort.haus";
+        description = "SeaweedFS S3 anycast DNS name.";
+      };
+
       port = lib.mkOption {
         type = lib.types.port;
         default = 8333;

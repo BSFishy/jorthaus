@@ -174,6 +174,12 @@ in
       "d ${filerConfigDir} 0750 seaweedfs-filer seaweedfs -"
     ];
 
+    jorthaus.routing.loopbackAddresses = [
+      "${cfg.master.address}/32"
+      "${cfg.filer.address}/32"
+      "${cfg.s3.address}/32"
+    ];
+
     networking.firewall.allowedTCPPorts = [
       cfg.master.port
       cfg.master.grpcPort
@@ -273,7 +279,7 @@ in
           (lib.getExe' pkgs.seaweedfs "weed")
           "master"
           "-ip=${host.hostname}.node.jort.haus"
-          "-ip.bind=${host.ipam.ipv4.address}"
+          "-ip.bind=0.0.0.0"
           "-port=${toString cfg.master.port}"
           "-port.grpc=${toString cfg.master.grpcPort}"
           "-mdir=${cfg.master.dir}"
@@ -310,13 +316,13 @@ in
           "filer"
           "-master=${cfg.filer.masters}"
           "-ip=${host.hostname}.node.jort.haus"
-          "-ip.bind=${host.ipam.ipv4.address}"
+          "-ip.bind=0.0.0.0"
           "-port=${toString cfg.filer.port}"
           "-port.grpc=${toString cfg.filer.grpcPort}"
           "-defaultStoreDir=${cfg.filer.dir}"
           "-s3"
           "-s3.port=${toString cfg.s3.port}"
-          "-s3.ip.bind=${host.ipam.ipv4.address}"
+          "-s3.ip.bind=0.0.0.0"
           "-s3.config=${s3ConfigFile}"
           "-metricsIp=${host.ipam.ipv4.address}"
         ];
