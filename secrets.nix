@@ -47,4 +47,5 @@ in
   "secrets/valkey-password.age".publicKeys = valkey-hosts;
   "secrets/seaweedfs-approle-role-id.age".publicKeys = seaweedfs-hosts;
   "secrets/seaweedfs-approle-secret-id.age".publicKeys = seaweedfs-hosts;
+  "secrets/seaweedfs-jwt-filer-signing-key.age".publicKeys = seaweedfs-hosts;
 }

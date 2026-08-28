@@ -185,6 +185,12 @@ in
     };
 
     s3 = {
+      httpsPort = lib.mkOption {
+        type = lib.types.port;
+        default = 8443;
+        description = "SeaweedFS S3 HTTPS port.";
+      };
+
       address = lib.mkOption {
         type = lib.types.str;
         default = "10.1.11.15";

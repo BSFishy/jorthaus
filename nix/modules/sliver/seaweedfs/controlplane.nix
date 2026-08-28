@@ -9,6 +9,7 @@ let
   cfg = config.jorthaus.seaweedfs;
   roleIdSecretName = "seaweedfs-approle-role-id";
   secretIdSecretName = "seaweedfs-approle-secret-id";
+  filerSigningKeySecretName = "seaweedfs-jwt-filer-signing-key";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
   filerAgentDir = "/run/seaweedfs-agent-filer";
@@ -17,6 +18,9 @@ let
   filerTomlPath = "${filerConfigDir}/filer.toml";
   credsFile = "${filerAgentDir}/postgres.env";
   s3ConfigFile = "${filerAgentDir}/s3.json";
+  certName = "seaweedfs-${host.hostname}";
+  nodeDnsName = "${host.hostname}.node.jort.haus";
+  certDir = config.security.acme.certs.${certName}.directory;
   restartHelper = pkgs.writeShellScript "jorthaus-seaweedfs-credential-refresh" ''
     set -eu
 
@@ -148,6 +152,27 @@ in
       mode = "0400";
     };
 
+    age.secrets.${filerSigningKeySecretName} = {
+      file = ../../../../secrets/seaweedfs-jwt-filer-signing-key.age;
+      owner = "seaweedfs-filer";
+      group = "seaweedfs";
+      mode = "0400";
+    };
+
+    security.acme.certs.${certName} = {
+      domain = nodeDnsName;
+      extraDomainNames = [
+        cfg.master.dnsName
+        cfg.filer.dnsName
+        cfg.s3.dnsName
+      ];
+      group = "seaweedfs";
+      reloadServices = [
+        "seaweedfs-master.service"
+        "seaweedfs-filer.service"
+      ];
+    };
+
     jorthaus.persistence.directories = [
       {
         directory = "/srv/seaweedfs";
@@ -186,6 +211,7 @@ in
       cfg.filer.port
       cfg.filer.grpcPort
       cfg.s3.port
+      cfg.s3.httpsPort
     ];
 
     environment.systemPackages = [
@@ -300,12 +326,17 @@ in
       after = [
         "network-online.target"
         "vault-agent-seaweedfs.service"
+        "acme-order-renew-${certName}.service"
       ];
       wants = [
         "network-online.target"
         "vault-agent-seaweedfs.service"
+        "acme-order-renew-${certName}.service"
       ];
-      unitConfig.RequiresMountsFor = [ cfg.filer.dir ];
+      unitConfig = {
+        RequiresMountsFor = [ cfg.filer.dir ];
+        ConditionPathExists = "${certDir}/fullchain.pem";
+      };
       serviceConfig = {
         User = "seaweedfs-filer";
         Group = "seaweedfs";
@@ -322,7 +353,10 @@ in
           "-defaultStoreDir=${cfg.filer.dir}"
           "-s3"
           "-s3.port=${toString cfg.s3.port}"
+          "-s3.port.https=${toString cfg.s3.httpsPort}"
           "-s3.ip.bind=0.0.0.0"
+          "-s3.cert.file=${certDir}/fullchain.pem"
+          "-s3.key.file=${certDir}/key.pem"
           "-s3.config=${s3ConfigFile}"
           "-metricsIp=${host.ipam.ipv4.address}"
         ];
@@ -330,6 +364,7 @@ in
         RuntimeDirectory = "seaweedfs-filer";
         RuntimeDirectoryMode = "0750";
         WorkingDirectory = filerRuntimeDir;
+        EnvironmentFile = config.age.secrets.${filerSigningKeySecretName}.path;
       };
     };
 
