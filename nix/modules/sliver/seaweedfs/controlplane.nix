@@ -1,22 +1,18 @@
 {
   config,
   host,
-  hostInventory,
   lib,
   pkgs,
   ...
 }:
 let
-  enabled = host.slivers.seaweedfs.enable;
-  postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
-    lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
-  );
-  postgresBootstrapHost = lib.head postgresHosts;
+  cfg = config.jorthaus.seaweedfs;
   roleIdSecretName = "seaweedfs-approle-role-id";
   secretIdSecretName = "seaweedfs-approle-secret-id";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
-  credsFile = "/run/seaweedfs/postgres.env";
+  filerRuntimeDir = "/run/seaweedfs-filer";
+  credsFile = "${filerRuntimeDir}/postgres.env";
   restartHelper = pkgs.writeShellScript "jorthaus-seaweedfs-credential-refresh" ''
     set -eu
 
@@ -64,46 +60,72 @@ let
   '';
 in
 {
-  config = lib.mkIf enabled {
-    assertions = [
-      {
-        assertion = postgresHosts != [ ];
-        message = "The seaweedfs sliver requires at least one enabled postgres node.";
-      }
-    ];
+  config = lib.mkIf (cfg.enable && cfg.controlplaneEnabled) {
     users = {
-      users.seaweedfs = {
-        isSystemUser = true;
-        group = "seaweedfs";
-      };
-
       groups.seaweedfs = { };
+
+      users = {
+        seaweedfs-master = {
+          isSystemUser = true;
+          group = "seaweedfs";
+        };
+
+        seaweedfs-filer = {
+          isSystemUser = true;
+          group = "seaweedfs";
+        };
+      };
     };
 
     age.secrets.${roleIdSecretName} = {
-      file = ../../../secrets/seaweedfs-approle-role-id.age;
-      owner = "seaweedfs";
+      file = ../../../../secrets/seaweedfs-approle-role-id.age;
+      owner = "seaweedfs-filer";
       group = "seaweedfs";
       mode = "0400";
     };
 
     age.secrets.${secretIdSecretName} = {
-      file = ../../../secrets/seaweedfs-approle-secret-id.age;
-      owner = "seaweedfs";
+      file = ../../../../secrets/seaweedfs-approle-secret-id.age;
+      owner = "seaweedfs-filer";
       group = "seaweedfs";
       mode = "0400";
     };
 
+    jorthaus.persistence.directories = [
+      {
+        directory = "/srv/seaweedfs";
+        user = "root";
+        group = "seaweedfs";
+        mode = "0750";
+      }
+      {
+        directory = cfg.master.dir;
+        user = "seaweedfs-master";
+        group = "seaweedfs";
+        mode = "0750";
+      }
+    ];
+
     systemd.tmpfiles.rules = [
-      "d /run/seaweedfs 0750 seaweedfs seaweedfs -"
+      "d ${filerRuntimeDir} 0750 seaweedfs-filer seaweedfs -"
+    ];
+
+    networking.firewall.allowedTCPPorts = [
+      cfg.master.port
+      cfg.master.grpcPort
+    ];
+
+    environment.systemPackages = [
+      pkgs.seaweedfs
+      pkgs.openbao
     ];
 
     services.vault-agent.instances.seaweedfs = {
       package = pkgs.openbao;
-      user = "seaweedfs";
+      user = "seaweedfs-filer";
       group = "seaweedfs";
       settings = {
-        pid_file = "/run/seaweedfs/vault-agent.pid";
+        pid_file = "${filerRuntimeDir}/vault-agent.pid";
 
         vault = {
           address = "https://openbao.service.jort.haus:8200";
@@ -128,7 +150,7 @@ in
               {
                 type = "file";
                 config = {
-                  path = "/run/seaweedfs/openbao.token";
+                  path = "${filerRuntimeDir}/openbao.token";
                   mode = 256;
                 };
               }
@@ -136,9 +158,7 @@ in
           }
         ];
 
-        template_config = {
-          static_secret_render_interval = "5m";
-        };
+        template_config.static_secret_render_interval = "5m";
 
         template = [
           {
@@ -160,6 +180,34 @@ in
       };
     };
 
+    systemd.services.seaweedfs-master = {
+      description = "SeaweedFS master";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      unitConfig.RequiresMountsFor = [ cfg.master.dir ];
+      serviceConfig = {
+        User = "seaweedfs-master";
+        Group = "seaweedfs";
+        ExecStart = lib.escapeShellArgs [
+          (lib.getExe' pkgs.seaweedfs "weed")
+          "master"
+          "-ip=${host.hostname}.node.jort.haus"
+          "-ip.bind=${host.ipam.ipv4.address}"
+          "-port=${toString cfg.master.port}"
+          "-port.grpc=${toString cfg.master.grpcPort}"
+          "-mdir=${cfg.master.dir}"
+          "-peers=${cfg.master.peers}"
+          "-volumeSizeLimitMB=${toString cfg.master.volumeSizeLimitMB}"
+          "-resumeState=true"
+          "-metricsIp=${host.ipam.ipv4.address}"
+        ];
+        Restart = "on-failure";
+        RuntimeDirectory = "seaweedfs-master";
+        RuntimeDirectoryMode = "0750";
+      };
+    };
+
     systemd.services.vault-agent-seaweedfs = {
       after = [
         "network-online.target"
@@ -170,12 +218,12 @@ in
         "agenix.service"
       ];
       serviceConfig = {
-        RuntimeDirectory = lib.mkForce "seaweedfs";
+        RuntimeDirectory = lib.mkForce "seaweedfs-filer";
         RuntimeDirectoryMode = lib.mkForce "0750";
       };
     };
 
-    systemd.services.jorthaus-seaweedfs-postgres-bootstrap = lib.mkIf (host.hostname == postgresBootstrapHost.hostname) {
+    systemd.services.jorthaus-seaweedfs-postgres-bootstrap = lib.mkIf (cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname) {
       description = "Ensure the SeaweedFS PostgreSQL role and database exist";
       after = [
         "network-online.target"

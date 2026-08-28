@@ -8,6 +8,10 @@
     etcd.enable = true;
     postgres.enable = true;
     valkey.enable = true;
+    seaweedfs = {
+      enable = true;
+      role = "controlplane";
+    };
   };
 
   ipam = {
