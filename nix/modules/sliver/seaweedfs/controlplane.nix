@@ -16,6 +16,7 @@ let
   filerConfigDir = "${filerRuntimeDir}/.seaweedfs";
   filerTomlPath = "${filerConfigDir}/filer.toml";
   credsFile = "${filerAgentDir}/postgres.env";
+  s3ConfigFile = "${filerAgentDir}/s3.json";
   restartHelper = pkgs.writeShellScript "jorthaus-seaweedfs-credential-refresh" ''
     set -eu
 
@@ -242,7 +243,20 @@ in
               {{- end }}
             '';
           }
+          {
+            destination = s3ConfigFile;
+            perms = 256;
+            contents = ''
+              {{- with secret "seaweedfs/data/s3" }}
+              {{ .Data.data.config_json }}
+              {{- end }}
+            '';
+          }
         ];
+
+        # TODO: Replace the static OpenBao-rendered S3 identity config with an
+        # OpenBao plugin that issues dynamic JWT or equivalent short-lived S3
+        # credentials for clients.
       };
     };
 
@@ -303,6 +317,7 @@ in
           "-s3"
           "-s3.port=${toString cfg.s3.port}"
           "-s3.ip.bind=${host.ipam.ipv4.address}"
+          "-s3.config=${s3ConfigFile}"
           "-metricsIp=${host.ipam.ipv4.address}"
         ];
         Restart = "on-failure";
@@ -357,6 +372,14 @@ in
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
         PathChanged = credsFile;
+        Unit = "jorthaus-seaweedfs-credential-refresh.service";
+      };
+    };
+
+    systemd.paths.jorthaus-seaweedfs-s3-config-refresh = {
+      wantedBy = [ "multi-user.target" ];
+      pathConfig = {
+        PathChanged = s3ConfigFile;
         Unit = "jorthaus-seaweedfs-credential-refresh.service";
       };
     };

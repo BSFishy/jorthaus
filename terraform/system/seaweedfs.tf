@@ -3,11 +3,25 @@ resource "vault_auth_backend" "approle" {
   path = "approle"
 }
 
+resource "vault_mount" "seaweedfs" {
+  path        = "seaweedfs"
+  type        = "kv"
+  description = "SeaweedFS static configuration secrets"
+
+  options = {
+    version = "2"
+  }
+}
+
 resource "vault_policy" "seaweedfs" {
   name = "seaweedfs"
 
   policy = <<-EOT
     path "postgres/static-creds/seaweedfs" {
+      capabilities = ["read"]
+    }
+
+    path "seaweedfs/data/s3" {
       capabilities = ["read"]
     }
   EOT
