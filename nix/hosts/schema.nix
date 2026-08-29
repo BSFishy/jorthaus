@@ -38,6 +38,20 @@ in
         default = "dataplane";
         description = "SeaweedFS node role.";
       };
+
+      topology = {
+        dataCenter = mkOption {
+          type = types.str;
+          default = "home";
+          description = "SeaweedFS data center label for this node.";
+        };
+
+        rack = mkOption {
+          type = types.str;
+          default = name;
+          description = "SeaweedFS rack label for this node.";
+        };
+      };
     };
 
     ipam = {

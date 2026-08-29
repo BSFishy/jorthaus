@@ -63,6 +63,8 @@ in
           "-dir=${lib.concatStringsSep "," cfg.volume.dirs}"
           "-max=${cfg.volume.max}"
           "-master=${cfg.volume.masters}"
+          "-dataCenter=${cfg.topology.dataCenter}"
+          "-rack=${cfg.topology.rack}"
           "-metricsIp=${host.ipam.ipv4.address}"
         ];
         Restart = "on-failure";

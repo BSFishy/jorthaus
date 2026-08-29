@@ -22,6 +22,18 @@ let
   controlplaneEnabled = role == "controlplane";
   dataplaneEnabled = host.slivers.seaweedfs.enable && hasDataDisks;
   nodeDnsName = "${host.hostname}.node.jort.haus";
+  pathReplicationRules = [
+    {
+      locationPrefix = "/buckets/";
+      replication = "020";
+      volumeGrowthCount = 3;
+    }
+    {
+      locationPrefix = "/buckets/media/";
+      replication = "000";
+      volumeGrowthCount = 1;
+    }
+  ];
   tlsAltNames = lib.optionals controlplaneEnabled [
     "seaweed-master.service.jort.haus"
     "seaweed-filer.service.jort.haus"
@@ -93,6 +105,48 @@ in
       readOnly = true;
       default = if postgresHosts == [ ] then null else lib.head postgresHosts;
       description = "The host that performs one-time SeaweedFS Postgres bootstrap work.";
+    };
+
+    topology = {
+      dataCenter = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = host.slivers.seaweedfs.topology.dataCenter;
+        description = "SeaweedFS data center label for this node.";
+      };
+
+      rack = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = host.slivers.seaweedfs.topology.rack;
+        description = "SeaweedFS rack label for this node.";
+      };
+    };
+
+    pathReplication = lib.mkOption {
+      type = lib.types.listOf (
+        lib.types.submodule {
+          options = {
+            locationPrefix = lib.mkOption {
+              type = lib.types.str;
+              description = "SeaweedFS filer path prefix to configure.";
+            };
+
+            replication = lib.mkOption {
+              type = lib.types.str;
+              description = "SeaweedFS replication string for writes under this prefix.";
+            };
+
+            volumeGrowthCount = lib.mkOption {
+              type = lib.types.int;
+              description = "Number of physical volumes to grow when this prefix needs capacity.";
+            };
+          };
+        }
+      );
+      readOnly = true;
+      default = pathReplicationRules;
+      description = "Path-specific SeaweedFS replication defaults applied through filer configuration.";
     };
 
     master = {

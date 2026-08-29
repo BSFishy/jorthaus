@@ -30,6 +30,20 @@ let
       fi
     done
   '';
+  applyPathReplication = pkgs.writeShellScript "jorthaus-seaweedfs-apply-path-replication" ''
+    set -euo pipefail
+
+    for _ in $(seq 1 30); do
+      if ${lib.getExe pkgs.curl} -fsS http://127.0.0.1:${toString cfg.filer.port}/ >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+
+    printf '%s\n' \
+${lib.concatMapStringsSep " \\\n" (rule: "      ${lib.escapeShellArg "fs.configure -locationPrefix=${rule.locationPrefix} -replication=${rule.replication} -volumeGrowthCount=${toString rule.volumeGrowthCount} -apply"}") cfg.pathReplication} \
+      | ${lib.getExe' pkgs.seaweedfs "weed"} shell -master=127.0.0.1:${toString cfg.master.port} -filer=127.0.0.1:${toString cfg.filer.port}
+  '';
   renderFilerToml = pkgs.writeShellScript "jorthaus-seaweedfs-render-filer-toml" ''
     set -eu
 
@@ -397,6 +411,29 @@ in
         Type = "oneshot";
         User = "root";
         ExecStart = postgresBootstrap;
+      };
+      wantedBy = [ "multi-user.target" ];
+    };
+
+    # TODO: Run periodic SeaweedFS maintenance from Kubernetes once the cluster
+    # exists. A scheduled weed shell job should handle operations such as
+    # volume.fix.replication and, if needed, volume.balance for day-2 repair.
+    systemd.services.jorthaus-seaweedfs-path-replication = lib.mkIf (cfg.controlplaneHosts != [ ] && host.hostname == (lib.head cfg.controlplaneHosts).hostname) {
+      description = "Apply SeaweedFS path-specific replication defaults";
+      after = [
+        "network-online.target"
+        "seaweedfs-master.service"
+        "seaweedfs-filer.service"
+      ];
+      wants = [
+        "network-online.target"
+        "seaweedfs-master.service"
+        "seaweedfs-filer.service"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        ExecStart = applyPathReplication;
       };
       wantedBy = [ "multi-user.target" ];
     };
