@@ -42,6 +42,9 @@ in
       reloadServices = [ "openbao.service" ];
     };
 
+    # TODO: Keep the OpenBao bootstrap surface as small as possible. Secrets
+    # delivered here should be limited to the material required to bring the
+    # OpenBao cluster up before it can serve as the primary secret source.
     age.secrets.openbao-key-2026-08-23 = {
       file = ../../../secrets/openbao-key-2026-08-23.age;
       mode = "0700";
@@ -60,6 +63,9 @@ in
 
     jorthaus.routing.loopbackAddresses = [ "${serviceAddress}/32" ];
 
+    # TODO: Tighten OpenBao network exposure once the steady-state client paths
+    # are settled. The current firewall allows cluster and API ports broadly,
+    # and the UI remains enabled on every node.
     networking.firewall.allowedTCPPorts = [
       8200
       8201
@@ -84,6 +90,8 @@ in
       enable = true;
       settings = {
         cluster_name = "jorthaus-openbao";
+        # TODO: Revisit whether every OpenBao node should expose the UI once a
+        # more deliberate admin access pattern exists.
         ui = true;
 
         api_addr = "https://${externalApiDnsName}:8200";

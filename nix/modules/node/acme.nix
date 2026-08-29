@@ -4,6 +4,9 @@ let
   nodeDnsName = "${host.hostname}.node.jort.haus";
 in
 {
+  # TODO: Revisit how ACME provider credentials are sourced once the cluster
+  # has a broader OpenBao-first bootstrap story. This secret currently remains
+  # in agenix because certificate issuance must work before OpenBao is ready.
   age.secrets.acme-vars.file = ../../../secrets/acme-vars.age;
 
   users.groups.cert = { };

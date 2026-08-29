@@ -191,12 +191,17 @@ in
       "d ${filerConfigDir} 0750 seaweedfs-filer seaweedfs -"
     ];
 
+    # TODO: Gate SeaweedFS anycast advertisement on local endpoint health so
+    # master, filer, and S3 addresses withdraw when the local services are not
+    # ready to serve traffic.
     jorthaus.routing.loopbackAddresses = [
       "${cfg.master.address}/32"
       "${cfg.filer.address}/32"
       "${cfg.s3.address}/32"
     ];
 
+    # TODO: Tighten SeaweedFS firewall exposure once the expected client,
+    # replication, and operator networks are fully mapped out.
     networking.firewall.allowedTCPPorts = [
       cfg.master.port
       cfg.master.grpcPort
@@ -211,6 +216,9 @@ in
       pkgs.openbao
     ];
 
+    # TODO: Replace the shared SeaweedFS AppRole material with per-node
+    # credentials once the operational shape is stable. Per-node auth material
+    # makes rotation and node replacement less coupled.
     services.vault-agent.instances.seaweedfs = {
       package = pkgs.openbao;
       user = "seaweedfs-filer";
@@ -395,6 +403,9 @@ in
       };
     };
 
+    # TODO: Move this database bootstrap into an idempotent activation-time
+    # setup path once cluster-scoped initialization is no longer modeled as a
+    # boot-time systemd oneshot.
     systemd.services.jorthaus-seaweedfs-postgres-bootstrap = lib.mkIf (cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname) {
       description = "Ensure the SeaweedFS PostgreSQL role and database exist";
       after = [

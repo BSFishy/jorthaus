@@ -68,6 +68,10 @@ in
       reloadServices = [ "patroni.service" ];
     };
 
+    # TODO: Move Postgres service credentials out of agenix and into OpenBao
+    # delivery once the OpenBao-first bootstrap path is cleaned up. A small
+    # bootstrap ring should remain, but steady-state database secrets should not
+    # live as encrypted repo files.
     age.secrets.patroni-postgres-superuser-password = {
       file = ../../../secrets/patroni-postgres-superuser-password.age;
       owner = "patroni";
@@ -116,6 +120,9 @@ in
       "d ${backupSpoolDir} 0700 patroni patroni -"
     ];
 
+    # TODO: Tighten Postgres and Patroni firewall exposure to the minimum set
+    # of source networks once the long-term client and operator paths are
+    # finalized.
     networking.firewall.allowedTCPPorts = [
       postgresPort
       restApiPort
@@ -149,6 +156,9 @@ in
       };
     };
 
+    # TODO: Gate anycast advertisement for the Postgres VIP on local health so
+    # the service address withdraws when this node cannot serve the intended
+    # role.
     jorthaus.haproxy.services.postgres-rw = {
       enable = true;
       address = serviceAddress;
@@ -169,7 +179,9 @@ in
       wants = [ "patroni.service" ];
     };
 
-    # TODO: move pgbackrest to kubernetes once its running
+    # TODO: Run pgBackRest from Kubernetes once the cluster exists. The backup
+    # schedule and ad hoc check job fit better as CronJobs than as node-local
+    # systemd timers and oneshot services.
     services.pgbackrest = {
       enable = true;
       settings = {
@@ -205,6 +217,8 @@ in
 
     users.users.patroni.extraGroups = [ "pgbackrest" ];
 
+    # TODO: Keep database bootstrap and other cluster-scoped setup work out of
+    # long-lived systemd units once a cleaner activation-time pattern exists.
     systemd.services.jorthaus-pgbackrest-check = {
       description = "Check pgBackRest stanza ${backupStanza}";
       after = [ "network-online.target" "patroni.service" ];

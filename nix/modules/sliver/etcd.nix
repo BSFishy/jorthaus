@@ -65,6 +65,8 @@ in
       }
     ];
 
+    # TODO: Tighten etcd firewall exposure once the long-term coordination
+    # design is settled, whether that remains etcd or moves to another system.
     networking.firewall.allowedTCPPorts = [
       clientPort
       peerPort

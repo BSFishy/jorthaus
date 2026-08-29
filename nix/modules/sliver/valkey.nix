@@ -65,6 +65,9 @@ in
       ];
     };
 
+    # TODO: Move the Valkey bootstrap password into OpenBao-backed delivery
+    # once the OpenBao-first startup path is reduced to a minimal bootstrap
+    # secret set.
     age.secrets.${valkeyPasswordSecret} = {
       file = ../../../secrets/valkey-password.age;
       owner = "redis-valkey";
@@ -90,6 +93,8 @@ in
       }
     ];
 
+    # TODO: Tighten Valkey and Sentinel firewall exposure once the expected
+    # client and operator networks are fixed.
     networking.firewall.allowedTCPPorts = [
       valkeyPort
       sentinelPort
@@ -103,6 +108,9 @@ in
     services.redis = {
       package = pkgs.valkey;
       servers = {
+        # TODO: Tighten the Valkey client trust model once the client set is
+        # stable. The current deployment relies on passwords plus TLS without
+        # client certificate enforcement.
         valkey = {
           enable = true;
           port = 0;
@@ -208,6 +216,8 @@ in
       '';
     };
 
+    # TODO: Gate anycast advertisement for the Valkey VIP on local health so
+    # traffic only lands on nodes whose local proxy view is healthy.
     jorthaus.haproxy.services.valkey-rw = {
       enable = true;
       address = serviceAddress;

@@ -25,6 +25,9 @@ let
       fi
     done
   '';
+  # TODO: Tighten the public-facing SeaweedFS security posture once the client
+  # set is stable. The current config allows broad CORS and does not require a
+  # client certificate for filer HTTPS.
   sharedSecurityToml = ''
     [cors.allowed_origins]
     values = "*"
@@ -135,6 +138,8 @@ PY
 in
 {
   config = lib.mkIf cfg.enable {
+    # TODO: Reduce the remaining SeaweedFS agenix bootstrap material once node
+    # authentication can be modeled in a more OpenBao-native way.
     age.secrets.${roleIdSecretName} = {
       file = ../../../../secrets/seaweedfs-approle-role-id.age;
       owner = "root";

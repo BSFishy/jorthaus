@@ -66,6 +66,9 @@ in
         '')
       ];
 
+      # TODO: Gate service IP advertisement on local service health instead of
+      # exporting every configured loopback address unconditionally. Anycast
+      # endpoints should withdraw when the local daemon or proxy is unhealthy.
       services.bird = {
         enable = true;
         config = ''
