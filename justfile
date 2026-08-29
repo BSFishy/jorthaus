@@ -3,15 +3,25 @@ set default-list := true
 
 import 'terraform/justfile'
 
+# verify nix diagnostics pass
+[group('nix')]
+nix-check:
+  @find . -name '*.nix' | xargs nil diagnostics --deny-warnings
+
 # ssh into a nixos node
 [group('nix')]
 ssh host:
   ssh matt@{{host}}.node.jort.haus
 
+# reboot a nixos node
+[group('nix')]
+reboot host:
+  ssh matt@{{host}}.node.jort.haus sudo reboot
+
 # build and switch a nixos node
 [group('nix')]
 switch host:
-  nh os switch --elevation-strategy passwordless --target-host {{host}}.node.jort.haus .#{{host}}
+  nh os switch --elevation-strategy passwordless --show-activation-logs --target-host {{host}}.node.jort.haus .#{{host}}
 
 # install a nixos node from a live environment over ssh
 [group('nix')]

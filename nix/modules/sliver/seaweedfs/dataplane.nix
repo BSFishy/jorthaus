@@ -26,17 +26,33 @@ in
       cfg.volume.grpcPort
     ];
 
-    environment.systemPackages = [ pkgs.seaweedfs ];
+    environment.systemPackages = [
+      pkgs.seaweedfs
+      pkgs.openbao
+    ];
 
     systemd.services.seaweedfs-volume = {
       description = "SeaweedFS volume";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      unitConfig.RequiresMountsFor = cfg.volume.dirs;
+      after = [
+        "network-online.target"
+        "jorthaus-seaweedfs-pki-renew.service"
+      ];
+      wants = [
+        "network-online.target"
+        "jorthaus-seaweedfs-pki-renew.service"
+      ];
+      unitConfig = {
+        RequiresMountsFor = cfg.volume.dirs;
+        ConditionPathExists = [
+          cfg.tls.certFile
+          "${cfg.tls.dir}/jwt.env"
+        ];
+      };
       serviceConfig = {
         User = "seaweedfs-volume";
         Group = "seaweedfs";
+        EnvironmentFile = "${cfg.tls.dir}/jwt.env";
         ExecStart = lib.escapeShellArgs [
           (lib.getExe' pkgs.seaweedfs "weed")
           "volume"

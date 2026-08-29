@@ -8,6 +8,19 @@ in
 
   users.groups.cert = { };
 
+  jorthaus.persistence.directories = [
+    {
+      directory = "/var/lib/acme";
+      user = "acme";
+      group = "acme";
+      mode = "0711";
+    }
+  ];
+
+  systemd.tmpfiles.rules = [
+    "z /var/lib/acme 0711 acme acme - -"
+  ];
+
   security.acme = {
     acceptTerms = true;
 

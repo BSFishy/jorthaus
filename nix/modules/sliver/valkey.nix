@@ -110,7 +110,7 @@ in
           appendOnly = true;
           save = [ ];
           requirePassFile = valkeyPasswordFile;
-          masterAuthFile = if host.hostname == bootstrapHost.hostname then null else valkeyPasswordFile;
+          masterAuthFile = valkeyPasswordFile;
           settings = {
             protected-mode = false;
             tls-port = valkeyPort;
@@ -157,26 +157,32 @@ in
     systemd.services.redis-valkey = {
       after = [
         "network-online.target"
-        "acme-order-renew-${certName}.service"
+        "var-lib-acme.mount"
       ];
       wants = [
         "network-online.target"
-        "acme-order-renew-${certName}.service"
+        "var-lib-acme.mount"
       ];
-      unitConfig.ConditionPathExists = "${certDir}/fullchain.pem";
+      unitConfig = {
+        RequiresMountsFor = [ "/var/lib/acme" ];
+        ConditionPathExists = "${certDir}/fullchain.pem";
+      };
     };
     systemd.services.redis-valkey-sentinel = {
       after = [
         "network-online.target"
+        "var-lib-acme.mount"
         "redis-valkey.service"
-        "acme-order-renew-${certName}.service"
       ];
       wants = [
         "network-online.target"
+        "var-lib-acme.mount"
         "redis-valkey.service"
-        "acme-order-renew-${certName}.service"
       ];
-      unitConfig.ConditionPathExists = "${certDir}/fullchain.pem";
+      unitConfig = {
+        RequiresMountsFor = [ "/var/lib/acme" ];
+        ConditionPathExists = "${certDir}/fullchain.pem";
+      };
       preStart = lib.mkAfter ''
         sentinel_conf=/var/lib/redis-valkey-sentinel/redis.conf
         sentinel_run_conf=/run/redis-valkey-sentinel/nixos.conf

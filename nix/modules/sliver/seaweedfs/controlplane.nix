@@ -9,7 +9,6 @@ let
   cfg = config.jorthaus.seaweedfs;
   roleIdSecretName = "seaweedfs-approle-role-id";
   secretIdSecretName = "seaweedfs-approle-secret-id";
-  filerSigningKeySecretName = "seaweedfs-jwt-filer-signing-key";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
   filerAgentDir = "/run/seaweedfs-agent-filer";
@@ -81,22 +80,10 @@ let
     """
     EOF
 
-    cat > ${filerSecurityTomlPath} <<EOF
-    [cors.allowed_origins]
-    values = "*"
+    install -m 0400 -o seaweedfs-filer -g seaweedfs /etc/seaweedfs/security.toml ${filerSecurityTomlPath}
 
-    [https.master]
-    cert = "${certDir}/fullchain.pem"
-    key = "${certDir}/key.pem"
-
-    [https.filer]
-    cert = "${certDir}/fullchain.pem"
-    key = "${certDir}/key.pem"
-    disable_tls_verify_client_cert = true
-    EOF
-
-    chown seaweedfs-filer:seaweedfs ${filerTomlPath} ${filerSecurityTomlPath}
-    chmod 0400 ${filerTomlPath} ${filerSecurityTomlPath}
+    chown seaweedfs-filer:seaweedfs ${filerTomlPath}
+    chmod 0400 ${filerTomlPath}
   '';
   postgresBootstrap = pkgs.writeShellScript "jorthaus-seaweedfs-postgres-bootstrap" ''
     set -eu
@@ -153,27 +140,6 @@ in
       };
     };
 
-    age.secrets.${roleIdSecretName} = {
-      file = ../../../../secrets/seaweedfs-approle-role-id.age;
-      owner = "seaweedfs-filer";
-      group = "seaweedfs";
-      mode = "0400";
-    };
-
-    age.secrets.${secretIdSecretName} = {
-      file = ../../../../secrets/seaweedfs-approle-secret-id.age;
-      owner = "seaweedfs-filer";
-      group = "seaweedfs";
-      mode = "0400";
-    };
-
-    age.secrets.${filerSigningKeySecretName} = {
-      file = ../../../../secrets/seaweedfs-jwt-filer-signing-key.age;
-      owner = "seaweedfs-filer";
-      group = "seaweedfs";
-      mode = "0400";
-    };
-
     security.acme.certs.${certName} = {
       domain = nodeDnsName;
       extraDomainNames = [
@@ -182,25 +148,8 @@ in
         cfg.s3.dnsName
       ];
       group = "seaweedfs";
-      reloadServices = [
-        "seaweedfs-master.service"
-        "seaweedfs-filer.service"
-      ];
+      reloadServices = [ "seaweedfs-filer.service" ];
     };
-
-    environment.etc."seaweedfs/security.toml".text = ''
-      [cors.allowed_origins]
-      values = "*"
-
-      [https.master]
-      cert = "${certDir}/fullchain.pem"
-      key = "${certDir}/key.pem"
-
-      [https.filer]
-      cert = "${certDir}/fullchain.pem"
-      key = "${certDir}/key.pem"
-      disable_tls_verify_client_cert = true
-    '';
 
     jorthaus.persistence.directories = [
       {
@@ -270,6 +219,7 @@ in
                 config = {
                   role_id_file_path = roleIdFile;
                   secret_id_file_path = secretIdFile;
+                  remove_secret_id_file_after_reading = false;
                 };
               }
             ];
@@ -326,19 +276,23 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [
         "network-online.target"
-        "acme-order-renew-${certName}.service"
+        "jorthaus-seaweedfs-pki-renew.service"
       ];
       wants = [
         "network-online.target"
-        "acme-order-renew-${certName}.service"
+        "jorthaus-seaweedfs-pki-renew.service"
       ];
       unitConfig = {
         RequiresMountsFor = [ cfg.master.dir ];
-        ConditionPathExists = "${certDir}/fullchain.pem";
+        ConditionPathExists = [
+          cfg.tls.certFile
+          "${cfg.tls.dir}/jwt.env"
+        ];
       };
       serviceConfig = {
         User = "seaweedfs-master";
         Group = "seaweedfs";
+        EnvironmentFile = "${cfg.tls.dir}/jwt.env";
         ExecStart = lib.escapeShellArgs [
           (lib.getExe' pkgs.seaweedfs "weed")
           "master"
@@ -363,17 +317,23 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [
         "network-online.target"
+        "var-lib-acme.mount"
         "vault-agent-seaweedfs.service"
-        "acme-order-renew-${certName}.service"
+        "jorthaus-seaweedfs-pki-renew.service"
       ];
       wants = [
         "network-online.target"
+        "var-lib-acme.mount"
         "vault-agent-seaweedfs.service"
-        "acme-order-renew-${certName}.service"
+        "jorthaus-seaweedfs-pki-renew.service"
       ];
       unitConfig = {
-        RequiresMountsFor = [ cfg.filer.dir ];
-        ConditionPathExists = "${certDir}/fullchain.pem";
+        RequiresMountsFor = [ cfg.filer.dir "/var/lib/acme" ];
+        ConditionPathExists = [
+          cfg.tls.certFile
+          "${cfg.tls.dir}/jwt.env"
+          "${certDir}/fullchain.pem"
+        ];
       };
       serviceConfig = {
         User = "seaweedfs-filer";
@@ -402,7 +362,7 @@ in
         RuntimeDirectory = "seaweedfs-filer";
         RuntimeDirectoryMode = "0750";
         WorkingDirectory = filerRuntimeDir;
-        EnvironmentFile = config.age.secrets.${filerSigningKeySecretName}.path;
+        EnvironmentFile = "${cfg.tls.dir}/jwt.env";
       };
     };
 
@@ -410,11 +370,11 @@ in
       after = [
         "network-online.target"
         "agenix.service"
-      ];
+      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       wants = [
         "network-online.target"
         "agenix.service"
-      ];
+      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       serviceConfig = {
         RuntimeDirectory = lib.mkForce "seaweedfs-agent-filer";
         RuntimeDirectoryMode = lib.mkForce "0750";
@@ -426,10 +386,12 @@ in
       after = [
         "network-online.target"
         "patroni.service"
+        "haproxy.service"
       ];
       wants = [
         "network-online.target"
         "patroni.service"
+        "haproxy.service"
       ];
       serviceConfig = {
         Type = "oneshot";

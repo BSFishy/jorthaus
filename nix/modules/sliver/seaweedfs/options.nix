@@ -21,6 +21,11 @@ let
   hasDataDisks = host.install.dataDisks != [ ];
   controlplaneEnabled = role == "controlplane";
   dataplaneEnabled = host.slivers.seaweedfs.enable && hasDataDisks;
+  nodeDnsName = "${host.hostname}.node.jort.haus";
+  tlsAltNames = lib.optionals controlplaneEnabled [
+    "seaweed-master.service.jort.haus"
+    "seaweed-filer.service.jort.haus"
+  ];
 in
 {
   options.jorthaus.seaweedfs = {
@@ -207,6 +212,50 @@ in
         type = lib.types.port;
         default = 8333;
         description = "SeaweedFS S3 HTTP port.";
+      };
+    };
+
+    tls = {
+      dir = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = "/run/seaweedfs-pki";
+        description = "Runtime directory containing SeaweedFS internal TLS materials.";
+      };
+
+      certFile = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = "${config.jorthaus.seaweedfs.tls.dir}/cert.pem";
+        description = "SeaweedFS internal leaf certificate path.";
+      };
+
+      keyFile = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = "${config.jorthaus.seaweedfs.tls.dir}/key.pem";
+        description = "SeaweedFS internal private key path.";
+      };
+
+      caFile = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = "${config.jorthaus.seaweedfs.tls.dir}/ca.pem";
+        description = "SeaweedFS internal CA certificate path.";
+      };
+
+      commonName = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = nodeDnsName;
+        description = "SeaweedFS internal certificate common name for this node.";
+      };
+
+      altNames = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        readOnly = true;
+        default = tlsAltNames;
+        description = "Additional DNS SANs requested for the SeaweedFS internal certificate on this node.";
       };
     };
 

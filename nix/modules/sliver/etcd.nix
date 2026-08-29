@@ -73,10 +73,10 @@ in
     users.users.etcd.extraGroups = [ "cert" ];
 
     systemd.services.etcd = {
-      after = [ "acme-order-renew-${nodeCertName}.service" ];
-      wants = [ "acme-order-renew-${nodeCertName}.service" ];
+      after = [ "var-lib-acme.mount" ];
+      wants = [ "var-lib-acme.mount" ];
       unitConfig = {
-        RequiresMountsFor = "/srv/etcd";
+        RequiresMountsFor = [ "/srv/etcd" "/var/lib/acme" ];
         ConditionPathExists = "${certDir}/fullchain.pem";
       };
       serviceConfig = {

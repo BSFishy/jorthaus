@@ -66,10 +66,10 @@ in
     ];
 
     systemd.services.openbao = {
-      after = [ "acme-order-renew-${certName}.service" ];
-      wants = [ "acme-order-renew-${certName}.service" ];
+      after = [ "var-lib-acme.mount" ];
+      wants = [ "var-lib-acme.mount" ];
       unitConfig = {
-        RequiresMountsFor = "/srv/openbao";
+        RequiresMountsFor = [ "/srv/openbao" "/var/lib/acme" ];
         ConditionPathExists = "${certDir}/fullchain.pem";
       };
       serviceConfig = {

@@ -124,16 +124,17 @@ in
     systemd.services.patroni = {
       after = [
         "network-online.target"
-        "acme-order-renew-${certName}.service"
+        "var-lib-acme.mount"
       ];
       wants = [
         "network-online.target"
-        "acme-order-renew-${certName}.service"
+        "var-lib-acme.mount"
       ];
       unitConfig = {
         RequiresMountsFor = [
           patroniDataDir
           postgresDataDir
+          "/var/lib/acme"
         ];
         ConditionPathExists = "${certDir}/fullchain.pem";
       };
