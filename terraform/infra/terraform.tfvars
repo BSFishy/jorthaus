@@ -16,6 +16,10 @@ dns_hosts = {
   "mc" = "10.1.12.10"
 }
 
+minecraft_public_hostname           = "mc"
+minecraft_velocity_load_balancer_ip = "10.1.12.10"
+cloudflare_ddns_login              = "jort.haus"
+
 frr_enable      = true
 frr_description = "Jorthaus BGP configuration"
 frr_router_id   = "10.1.0.1"

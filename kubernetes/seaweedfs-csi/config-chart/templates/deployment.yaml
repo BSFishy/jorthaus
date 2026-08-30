@@ -31,23 +31,6 @@ spec:
             - name: secrets-store
               mountPath: /mnt/secrets-store
               readOnly: true
-        - name: reloader
-          image: bitnami/kubectl@sha256:65447dcbb2813878e22265949a4ba4cca02f8d008ff3fe66a25354b511f28015
-          command:
-            - sh
-            - -ec
-            - |
-              last_rv=""
-              while true; do
-                rv="$(kubectl -n kube-system get secret seaweedfs-csi-config -o jsonpath='{.metadata.resourceVersion}')"
-                if [ -n "$last_rv" ] && [ "$rv" != "$last_rv" ]; then
-                  kubectl -n kube-system delete pod -l app=seaweedfs-csi-driver-mount --ignore-not-found --wait=false
-                  kubectl -n kube-system delete pod -l app=seaweedfs-csi-driver-node --ignore-not-found --wait=false
-                  kubectl -n kube-system delete pod -l app=seaweedfs-csi-driver-controller --ignore-not-found --wait=false
-                fi
-                last_rv="$rv"
-                sleep 30
-              done
       volumes:
         - name: secrets-store
           csi:
