@@ -52,3 +52,9 @@ minecraftProxy:
   serviceType: LoadBalancer
   loadBalancerIP: 10.1.12.10
   externalTrafficPolicy: Cluster
+
+persistence:
+  storageClass: seaweedfs-storage
+  dataDir:
+    enabled: true
+    Size: 1Gi

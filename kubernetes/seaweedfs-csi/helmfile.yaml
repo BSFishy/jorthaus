@@ -1,0 +1,10 @@
+repositories:
+  - name: seaweedfs-csi-driver
+    url: https://seaweedfs.github.io/seaweedfs-csi-driver/helm
+
+releases:
+  - name: seaweedfs-csi-driver
+    namespace: kube-system
+    chart: seaweedfs-csi-driver/seaweedfs-csi-driver
+    values:
+      - values/csi.yaml

@@ -1,0 +1,15 @@
+seaweedfsFiler: seaweed-filer.service.jort.haus:8888
+storageClassName: seaweedfs-storage
+storageClassVolumeBindingMode: Immediate
+isDefaultStorageClass: true
+tlsSecret: seaweedfs-csi-config
+
+security:
+  enabled: true
+  existingSecret: seaweedfs-csi-config
+
+mountService:
+  enabled: true
+
+node:
+  enabled: true

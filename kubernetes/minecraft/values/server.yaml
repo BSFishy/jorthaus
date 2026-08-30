@@ -27,3 +27,9 @@ minecraftServer:
   motd: "jort.haus vanilla"
   memory: 2G
   serviceType: ClusterIP
+
+persistence:
+  storageClass: seaweedfs-storage
+  dataDir:
+    enabled: true
+    Size: 20Gi
