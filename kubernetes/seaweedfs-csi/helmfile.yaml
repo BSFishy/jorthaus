@@ -3,6 +3,11 @@ repositories:
     url: https://seaweedfs.github.io/seaweedfs-csi-driver/helm
 
 releases:
+  - name: seaweedfs-csi-openbao
+    namespace: kube-system
+    chart: ./config-chart
+    disableValidation: true
+
   - name: seaweedfs-csi-driver
     namespace: kube-system
     chart: seaweedfs-csi-driver/seaweedfs-csi-driver

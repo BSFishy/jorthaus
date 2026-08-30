@@ -1,0 +1,4 @@
+apiVersion: v2
+name: seaweedfs-csi-config
+version: 0.1.0
+type: application

@@ -51,6 +51,49 @@ resource "vault_pki_secret_backend_role" "seaweedfs_node" {
   enforce_hostnames = false
 }
 
+data "vault_kv_secret_v2" "seaweedfs_security" {
+  mount = vault_mount.seaweedfs.path
+  name  = "security"
+}
+
+resource "vault_generic_secret" "seaweedfs_csi" {
+  path = "${vault_mount.seaweedfs.path}/data/csi"
+
+  data_json = jsonencode({
+    data = {
+      security_toml = <<-EOT
+        [jwt.signing]
+        key = "${data.vault_kv_secret_v2.seaweedfs_security.data["jwt_signing_key"]}"
+        expires_after_seconds = 10
+
+        [jwt.signing.read]
+        key = "${data.vault_kv_secret_v2.seaweedfs_security.data["jwt_signing_read_key"]}"
+        expires_after_seconds = 60
+
+        [jwt.filer_signing]
+        key = "${data.vault_kv_secret_v2.seaweedfs_security.data["jwt_filer_signing_key"]}"
+        expires_after_seconds = 10
+
+        [jwt.filer_signing.read]
+        key = "${data.vault_kv_secret_v2.seaweedfs_security.data["jwt_filer_signing_read_key"]}"
+        expires_after_seconds = 60
+
+        [grpc]
+        ca = "/var/run/secrets/app/tls/ca.crt"
+
+        [grpc.client]
+        cert = "/var/run/secrets/app/tls/tls.crt"
+        key = "/var/run/secrets/app/tls/tls.key"
+        ca = "/var/run/secrets/app/tls/ca.crt"
+
+        [https.client]
+        enabled = true
+        ca = "/var/run/secrets/app/tls/ca.crt"
+      EOT
+    }
+  })
+}
+
 resource "vault_policy" "seaweedfs" {
   name = "seaweedfs"
 
@@ -77,6 +120,24 @@ resource "vault_policy" "seaweedfs" {
   EOT
 }
 
+resource "vault_policy" "seaweedfs_csi" {
+  name = "seaweedfs-csi"
+
+  policy = <<-EOT
+    path "seaweedfs/data/csi" {
+      capabilities = ["read"]
+    }
+
+    path "seaweedfs-pki/issue/seaweedfs-node" {
+      capabilities = ["update"]
+    }
+
+    path "seaweedfs-pki/cert/ca" {
+      capabilities = ["read"]
+    }
+  EOT
+}
+
 resource "vault_approle_auth_backend_role" "seaweedfs" {
   backend        = vault_auth_backend.approle.path
   role_name      = "seaweedfs"
@@ -85,6 +146,20 @@ resource "vault_approle_auth_backend_role" "seaweedfs" {
   bind_secret_id     = true
   secret_id_ttl      = 0
   secret_id_num_uses = 0
+
+  token_type    = "service"
+  token_period  = 86400
+  token_ttl     = 3600
+  token_max_ttl = 14400
+}
+
+resource "vault_kubernetes_auth_backend_role" "seaweedfs_csi" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "seaweedfs-csi"
+  bound_service_account_names      = ["seaweedfs-csi-config-sync"]
+  bound_service_account_namespaces = ["kube-system"]
+  audience                         = "vault"
+  token_policies                   = [vault_policy.seaweedfs_csi.name]
 
   token_type    = "service"
   token_period  = 86400

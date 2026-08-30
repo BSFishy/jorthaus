@@ -1,0 +1,18 @@
+repositories:
+  - name: secrets-store-csi-driver
+    url: https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+  - name: hashicorp
+    url: https://helm.releases.hashicorp.com
+
+releases:
+  - name: secrets-store-csi-driver
+    namespace: kube-system
+    chart: secrets-store-csi-driver/secrets-store-csi-driver
+    values:
+      - values/secrets-store-csi-driver.yaml
+
+  - name: openbao-csi-provider
+    namespace: kube-system
+    chart: hashicorp/vault
+    values:
+      - values/openbao-csi-provider.yaml

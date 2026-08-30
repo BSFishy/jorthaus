@@ -1,0 +1,15 @@
+global:
+  tlsDisable: false
+  externalVaultAddr: https://openbao.service.jort.haus:8200
+
+server:
+  enabled: false
+
+injector:
+  enabled: false
+
+ui:
+  enabled: false
+
+csi:
+  enabled: true
