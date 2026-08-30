@@ -27,7 +27,9 @@ let
   postgresBootstrapHost = if postgresHosts == [ ] then null else lib.head postgresHosts;
   controlplaneEnabled = enabled && role == "controlplane";
   dataplaneEnabled = enabled && role == "dataplane";
-  nodeDnsName = "${host.hostname}.node.jort.haus";
+  stableApiHost = "k8s.service.jort.haus";
+  stableApiAddress = "10.1.11.16";
+  bootstrapApiDnsName = if bootstrapHost == null then null else "${bootstrapHost.hostname}.node.jort.haus";
   apiPort = 6443;
   flannelPort = 8472;
   roleIdSecretName = "k3s-approle-role-id";
@@ -47,7 +49,17 @@ let
     if bootstrapHost == null || host.hostname == bootstrapHost.hostname then
       ""
     else
-      "https://${bootstrapHost.hostname}.node.jort.haus:${toString apiPort}";
+      "https://${stableApiHost}:${toString apiPort}";
+  tlsSanHosts = lib.unique (
+    lib.filter (name: name != null) [
+      host.hostname
+      "${host.hostname}.node.jort.haus"
+      (if bootstrapHost == null then null else bootstrapHost.hostname)
+      bootstrapApiDnsName
+      stableApiHost
+      "localhost"
+    ]
+  );
   postgresBootstrap = pkgs.writeShellScriptBin "jorthaus-k3s-postgres-bootstrap" ''
     set -euo pipefail
 
@@ -165,6 +177,27 @@ in
         type = lib.types.port;
         default = apiPort;
         description = "k3s Kubernetes API port.";
+      };
+
+      stableHost = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = stableApiHost;
+        description = "Stable DNS name for the k3s API endpoint.";
+      };
+
+      stableAddress = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = stableApiAddress;
+        description = "Stable IPv4 address for the k3s API endpoint.";
+      };
+
+      tlsSans = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        readOnly = true;
+        default = tlsSanHosts;
+        description = "TLS SAN hostnames rendered into the k3s server certificate.";
       };
     };
 
@@ -332,6 +365,8 @@ in
       };
     };
 
+    jorthaus.routing.loopbackAddresses = lib.mkIf controlplaneEnabled [ "${cfg.api.stableAddress}/32" ];
+
     jorthaus.persistence.directories = lib.mkIf enabled [
       {
         directory = "/var/lib/rancher/k3s";
@@ -349,6 +384,7 @@ in
 
     networking.firewall.allowedTCPPorts = lib.mkIf enabled [ cfg.api.port ];
     networking.firewall.allowedUDPPorts = lib.mkIf enabled [ flannelPort ];
+    networking.firewall.checkReversePath = lib.mkIf enabled false;
 
     # This cluster starts without the built-in flannel dataplane so a
     # dedicated CNI such as Cilium can own pod networking from the outset.
@@ -366,14 +402,13 @@ in
         "--write-kubeconfig-mode=0640"
         "--disable-network-policy"
         "--flannel-backend=none"
-      ];
+      ] ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
     };
 
     # TODO: Move k3s datastore bootstrap into the long-term activation-time
     # setup path once cluster-scoped initialization is no longer modeled as a
     # manual helper or boot-time oneshot.
-    # TODO: Add a stable API endpoint for joining controlplane and dataplane
-    # nodes so later cluster growth does not depend on the first bootstrap
-    # node's address.
+    # TODO: Gate advertisement of ${stableApiAddress}/32 on local k3s API
+    # health so non-ready controlplanes withdraw the stable API endpoint.
   };
 }

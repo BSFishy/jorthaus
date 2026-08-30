@@ -1,6 +1,7 @@
 set dotenv-load
 set default-list := true
 
+import 'kubernetes/justfile'
 import 'terraform/justfile'
 
 # verify nix diagnostics pass

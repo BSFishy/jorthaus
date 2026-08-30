@@ -1,0 +1,18 @@
+{{- if .Values.bgp.enabled }}
+apiVersion: cilium.io/v2alpha1
+kind: CiliumBGPClusterConfig
+metadata:
+  name: router
+spec:
+  nodeSelector:
+{{ toYaml .Values.bgp.nodeSelector | indent 4 }}
+  bgpInstances:
+    - name: router
+      localASN: {{ .Values.bgp.localASN }}
+      peers:
+        - name: router-ipv4
+          peerASN: {{ .Values.bgp.peerASN }}
+          peerAddress: {{ .Values.bgp.peerAddress | quote }}
+          peerConfigRef:
+            name: router-ipv4
+{{- end }}

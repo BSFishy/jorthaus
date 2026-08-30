@@ -12,6 +12,7 @@ dns_hosts = {
   "seaweed-master.service" = "10.1.11.13"
   "seaweed-filer.service" = "10.1.11.14"
   "s3.service" = "10.1.11.15"
+  "k8s.service" = "10.1.11.16"
 }
 
 frr_enable      = true

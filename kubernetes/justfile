@@ -1,0 +1,45 @@
+# fetch a k3s kubeconfig for local kubectl use
+[script]
+[group('kubernetes')]
+kubeconfig host='gaia-01' dest="$HOME/.kube/jorthaus-k3s.yaml":
+  mkdir -p "$(dirname {{dest}})"
+  ssh matt@{{host}}.node.jort.haus 'sudo cat /etc/rancher/k3s/k3s.yaml' \
+    | sed 's#https://127.0.0.1:6443#https://k8s.service.jort.haus:6443#' \
+    > {{dest}}
+  chmod 600 {{dest}}
+
+# run helmfile against the top-level kubernetes tree or a specific subject
+[script]
+[group('kubernetes')]
+helmfile subject='' subcommand='sync':
+  if [ -n "{{subject}}" ]; then
+    state="kubernetes/{{subject}}/helmfile.yaml"
+  else
+    state="kubernetes/helmfile.yaml"
+  fi
+
+  helmfile -f "$state" {{subcommand}}
+
+# show the changes for a kubernetes subject
+[script]
+[group('kubernetes')]
+k8s-diff subject='':
+  if [ -n "{{subject}}" ]; then
+    state="kubernetes/{{subject}}/helmfile.yaml"
+  else
+    state="kubernetes/helmfile.yaml"
+  fi
+
+  helmfile -f "$state" diff
+
+# apply a kubernetes subject
+[script]
+[group('kubernetes')]
+k8s-apply subject='':
+  if [ -n "{{subject}}" ]; then
+    state="kubernetes/{{subject}}/helmfile.yaml"
+  else
+    state="kubernetes/helmfile.yaml"
+  fi
+
+  helmfile -f "$state" sync

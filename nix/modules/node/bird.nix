@@ -6,10 +6,12 @@
   ...
 }:
 let
-  serviceSubnet = "10.1.11.0/24";
+  infraServiceSubnet = "10.1.11.0/24";
+  kubernetesLoadBalancerSubnet = "10.1.12.0/24";
   nodeAs = 64512;
   routerAs = 64512;
   routerAddress = host.ipam.ipv4.gateway;
+  uplinkInterface = "bond0";
 in
 {
   options.jorthaus.routing = {
@@ -90,12 +92,25 @@ in
           }
 
           protocol bfd {
-            interface "${host.ipam.interface}";
+            interface "${uplinkInterface}";
           }
 
+          # TODO: Replace the coarse whole-subnet Kubernetes advertisement with
+          # a cleaner route-server / route-reflector design so Kubernetes
+          # LoadBalancer reachability is decoupled from node-local origination.
           filter export_service_ipv4 {
-            if net ~ [ ${serviceSubnet}{32,32} ] then accept;
+            if net ~ [ ${infraServiceSubnet}{32,32} ] then accept;
+            if net = ${kubernetesLoadBalancerSubnet} then accept;
             reject;
+          }
+
+          # TODO: Replace this aggregate Kubernetes LoadBalancer route with a
+          # more precise advertisement path, ideally via dedicated route-server
+          # infrastructure or Cilium-native peering once the architecture is
+          # worth the extra moving parts.
+          protocol static kubernetes_load_balancers_v4 {
+            ipv4;
+            route ${kubernetesLoadBalancerSubnet} blackhole;
           }
 
           protocol bgp upstream {

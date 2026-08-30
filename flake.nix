@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs-25-05.url = "github:NixOS/nixpkgs/nixos-25.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
     disko.url = "github:nix-community/disko";
     agenix.url = "github:ryantm/agenix";
@@ -64,6 +65,11 @@
 
       perSystem =
         { pkgs, system, ... }:
+        let
+          pkgs25 = import inputs.nixpkgs-25-05 {
+            inherit system;
+          };
+        in
         {
           formatter = pkgs.nixfmt-tree;
 
@@ -87,6 +93,9 @@
               agenix.packages.${system}.agenix
               kubectl
               k9s
+              cilium-cli
+              pkgs25.helmfile
+              pkgs25.kubernetes-helm
             ];
           };
         };
