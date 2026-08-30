@@ -1,0 +1,29 @@
+fullnameOverride: minecraft-server
+
+initContainers:
+  - name: render-paper-config
+    image: busybox:1.36
+    command:
+      - sh
+      - -ec
+      - |
+        mkdir -p /data/config
+        cat > /data/config/paper-global.yml <<'EOF'
+        proxies:
+          velocity:
+            enabled: true
+            online-mode: true
+            secret: "jorthaus-velocity-forwarding-secret"
+        EOF
+    volumeMounts:
+      - name: datadir
+        mountPath: /data
+
+minecraftServer:
+  eula: "TRUE"
+  type: PAPER
+  version: LATEST
+  onlineMode: false
+  motd: "jort.haus vanilla"
+  memory: 2G
+  serviceType: ClusterIP

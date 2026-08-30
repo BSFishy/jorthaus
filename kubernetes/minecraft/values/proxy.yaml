@@ -1,0 +1,54 @@
+fullnameOverride: minecraft-proxy
+
+initContainers:
+  - name: render-velocity-config
+    image: busybox:1.36
+    command:
+      - sh
+      - -ec
+      - |
+        cat > /server/velocity.toml <<'EOF'
+        config-version = "2.7"
+        bind = "0.0.0.0:25577"
+        motd = "jort.haus minecraft"
+        show-max-players = 100
+        online-mode = true
+        force-key-authentication = true
+        player-info-forwarding-mode = "modern"
+        forwarding-secret-file = "forwarding.secret"
+        announce-forge = false
+        ping-passthrough = "DISABLED"
+        enable-player-address-logging = true
+
+        [servers]
+        vanilla = "minecraft-server:25565"
+
+        try = [
+            "vanilla"
+        ]
+
+        [forced-hosts]
+        "mc.jort.haus" = [
+            "vanilla"
+        ]
+
+        [advanced]
+        haproxy-protocol = false
+        failover-on-unexpected-server-disconnect = true
+
+        [query]
+        enabled = false
+        EOF
+    volumeMounts:
+      - name: datadir
+        mountPath: /server
+
+minecraftProxy:
+  type: VELOCITY
+  velocityVersion: latest
+  velocityForwardingSecret: "jorthaus-velocity-forwarding-secret"
+  velocityForwardingSecretFilePath: /server/forwarding.secret
+  onlineMode: true
+  serviceType: LoadBalancer
+  loadBalancerIP: 10.1.12.10
+  externalTrafficPolicy: Cluster

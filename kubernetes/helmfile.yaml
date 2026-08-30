@@ -1,2 +1,3 @@
 helmfiles:
   - path: cilium-system/helmfile.yaml
+  - path: minecraft/helmfile.yaml

@@ -1,0 +1,18 @@
+repositories:
+  - name: itzg
+    url: https://itzg.github.io/minecraft-server-charts
+
+releases:
+  - name: minecraft-server
+    namespace: minecraft
+    createNamespace: true
+    chart: itzg/minecraft
+    values:
+      - values/server.yaml
+
+  - name: minecraft-proxy
+    namespace: minecraft
+    createNamespace: true
+    chart: itzg/minecraft-proxy
+    values:
+      - values/proxy.yaml
