@@ -32,3 +32,15 @@ resource "vault_database_secret_backend_static_role" "seaweedfs" {
     "ALTER ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}';"
   ]
 }
+
+resource "vault_database_secret_backend_static_role" "k3s" {
+  backend         = vault_mount.postgres.path
+  name            = "k3s"
+  db_name         = vault_database_secret_backend_connection.postgres.name
+  username        = "k3s"
+  rotation_period = 2592000
+
+  rotation_statements = [
+    "ALTER ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}';"
+  ]
+}

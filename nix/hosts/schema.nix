@@ -27,6 +27,19 @@ in
     slivers.openbao.enable = mkEnableOption "the OpenBao sliver";
     slivers.postgres.enable = mkEnableOption "the Patroni/Postgres sliver";
     slivers.valkey.enable = mkEnableOption "the Valkey sliver";
+    slivers.k3s = {
+      enable = mkEnableOption "the k3s sliver";
+      bootstrapOnly = mkEnableOption "the k3s secret bootstrap path without starting k3s";
+
+      role = mkOption {
+        type = types.enum [
+          "controlplane"
+          "dataplane"
+        ];
+        default = "dataplane";
+        description = "k3s node role.";
+      };
+    };
     slivers.seaweedfs = {
       enable = mkEnableOption "the SeaweedFS sliver";
 

@@ -85,6 +85,8 @@
               nixos-anywhere
               openbao
               agenix.packages.${system}.agenix
+              kubectl
+              k9s
             ];
           };
         };

@@ -33,8 +33,8 @@ resource "vault_pki_secret_backend_root_cert" "seaweedfs_pki" {
 resource "vault_pki_secret_backend_role" "seaweedfs_node" {
   backend            = vault_mount.seaweedfs_pki.path
   name               = "seaweedfs-node"
-  ttl                = "720h"
-  max_ttl            = "1440h"
+  ttl                = "2592000"
+  max_ttl            = "5184000"
   allow_bare_domains = true
   allow_subdomains   = true
   allow_glob_domains = true

@@ -8,6 +8,10 @@
     etcd.enable = true;
     postgres.enable = true;
     valkey.enable = true;
+    k3s = {
+      enable = true;
+      role = "controlplane";
+    };
     seaweedfs = {
       enable = true;
       role = "controlplane";

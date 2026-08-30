@@ -6,6 +6,7 @@ _:
     ./openbao.nix
     ./postgres.nix
     ./valkey.nix
+    ./k3s.nix
     ./seaweedfs
   ];
 }
