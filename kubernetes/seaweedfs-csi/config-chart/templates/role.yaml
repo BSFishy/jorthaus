@@ -12,11 +12,3 @@ rules:
       - seaweedfs-csi-config
     verbs:
       - get
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-    verbs:
-      - get
-      - list
-      - delete

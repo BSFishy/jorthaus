@@ -5,6 +5,11 @@ repositories:
     url: https://helm.releases.hashicorp.com
 
 releases:
+  - name: openbao-csi-config
+    namespace: kube-system
+    chart: ./config-chart
+    disableValidation: true
+
   - name: secrets-store-csi-driver
     namespace: kube-system
     chart: secrets-store-csi-driver/secrets-store-csi-driver
