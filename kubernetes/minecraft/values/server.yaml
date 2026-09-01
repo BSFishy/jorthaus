@@ -26,6 +26,8 @@ minecraftServer:
   onlineMode: false
   motd: "jort.haus vanilla"
   memory: 2G
+  extraEnv:
+    ALLOW_FLIGHT: "TRUE"
   spawnProtection: 0
   serviceType: ClusterIP
 

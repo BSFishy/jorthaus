@@ -37,6 +37,7 @@ initContainers:
         [advanced]
         haproxy-protocol = false
         failover-on-unexpected-server-disconnect = true
+        login-ratelimit = 0
 
         [query]
         enabled = false
