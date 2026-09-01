@@ -26,6 +26,7 @@ minecraftServer:
   onlineMode: false
   motd: "jort.haus vanilla"
   memory: 2G
+  spawnProtection: 0
   serviceType: ClusterIP
 
 persistence:

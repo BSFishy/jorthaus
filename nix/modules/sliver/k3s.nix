@@ -31,7 +31,7 @@ let
   stableApiAddress = "10.1.11.16";
   bootstrapApiDnsName = if bootstrapHost == null then null else "${bootstrapHost.hostname}.node.jort.haus";
   apiPort = 6443;
-  flannelPort = 8472;
+  ciliumGenevePort = 6081;
   roleIdSecretName = "k3s-approle-role-id";
   secretIdSecretName = "k3s-approle-secret-id";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
@@ -383,7 +383,7 @@ in
     ];
 
     networking.firewall.allowedTCPPorts = lib.mkIf enabled [ cfg.api.port ];
-    networking.firewall.allowedUDPPorts = lib.mkIf enabled [ flannelPort ];
+    networking.firewall.allowedUDPPorts = lib.mkIf enabled [ ciliumGenevePort ];
     networking.firewall.checkReversePath = lib.mkIf enabled false;
 
     # This cluster starts without the built-in flannel dataplane so a

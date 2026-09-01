@@ -33,9 +33,11 @@ l2announcements:
 
 loadBalancer:
   algorithm: maglev
-  mode: snat
+  mode: dsr
+  dsrDispatch: geneve
 
 operator:
   replicas: 3
 
 routingMode: native
+tunnelProtocol: geneve
