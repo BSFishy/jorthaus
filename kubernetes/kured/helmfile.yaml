@@ -1,0 +1,11 @@
+repositories:
+  - name: kubereboot
+    url: https://kubereboot.github.io/charts
+
+releases:
+  - name: kured
+    namespace: kube-system
+    createNamespace: true
+    chart: kubereboot/kured
+    values:
+      - values/kured.yaml

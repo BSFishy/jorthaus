@@ -32,6 +32,7 @@ let
   bootstrapApiDnsName = if bootstrapHost == null then null else "${bootstrapHost.hostname}.node.jort.haus";
   apiPort = 6443;
   ciliumGenevePort = 6081;
+  rebootSentinelFile = "/var/run/reboot-required";
   roleIdSecretName = "k3s-approle-role-id";
   secretIdSecretName = "k3s-approle-secret-id";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
@@ -385,6 +386,24 @@ in
     networking.firewall.allowedTCPPorts = lib.mkIf enabled [ cfg.api.port ];
     networking.firewall.allowedUDPPorts = lib.mkIf enabled [ ciliumGenevePort ];
     networking.firewall.checkReversePath = lib.mkIf enabled false;
+
+    systemd.services.jorthaus-k3s-weekly-reboot-sentinel = lib.mkIf enabled {
+      description = "Mark the node for a kured-managed weekly reboot";
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        ExecStart = "${pkgs.coreutils}/bin/touch ${rebootSentinelFile}";
+      };
+    };
+
+    systemd.timers.jorthaus-k3s-weekly-reboot-sentinel = lib.mkIf enabled {
+      description = "Weekly reboot sentinel for kured-managed node restarts";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "1w";
+        Unit = "jorthaus-k3s-weekly-reboot-sentinel.service";
+      };
+    };
 
     # This cluster starts without the built-in flannel dataplane so a
     # dedicated CNI such as Cilium can own pod networking from the outset.

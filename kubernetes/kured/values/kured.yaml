@@ -1,0 +1,9 @@
+configuration:
+  rebootSentinel: /var/run/reboot-required
+  startTime: "01:00"
+  endTime: "05:00"
+  timeZone: America/Chicago
+  period: 1h
+  lockReleaseDelay: 24h
+  concurrency: 1
+  annotateNodes: true
