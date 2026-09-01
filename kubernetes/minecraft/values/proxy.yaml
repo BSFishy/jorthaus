@@ -7,6 +7,7 @@ initContainers:
       - sh
       - -ec
       - |
+        mkdir -p /server
         cat > /server/velocity.toml <<'EOF'
         config-version = "2.7"
         bind = "0.0.0.0:25577"
@@ -16,8 +17,9 @@ initContainers:
         force-key-authentication = true
         player-info-forwarding-mode = "modern"
         forwarding-secret-file = "forwarding.secret"
-        announce-forge = false
-        ping-passthrough = "DISABLED"
+        announce-forge = true
+        kick-existing-players = true
+        ping-passthrough = "MODS"
         enable-player-address-logging = true
 
         [servers]
@@ -54,7 +56,5 @@ minecraftProxy:
   externalTrafficPolicy: Cluster
 
 persistence:
-  storageClass: seaweedfs-storage
   dataDir:
-    enabled: true
-    Size: 1Gi
+    enabled: false
