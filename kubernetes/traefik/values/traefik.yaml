@@ -1,0 +1,38 @@
+deployment:
+  kind: DaemonSet
+
+providers:
+  kubernetesCRD:
+    enabled: true
+    safeNaming: true
+  kubernetesIngress:
+    enabled: false
+
+global:
+  sendAnonymousUsage: false
+
+ports:
+  web:
+    http: &httpPolicy
+      sanitizePath: true
+      aliasHeadersStrategy: reject
+      encodedCharacters:
+        allowEncodedSlash: false
+        allowEncodedBackSlash: false
+        allowEncodedNullCharacter: false
+        allowEncodedSemicolon: false
+        allowEncodedPercent: false
+        allowEncodedQuestionMark: false
+        allowEncodedHash: false
+  websecure:
+    http: *httpPolicy
+  traefik:
+    http: *httpPolicy
+  metrics:
+    http: *httpPolicy
+
+service:
+  type: LoadBalancer
+  spec:
+    externalTrafficPolicy: Cluster
+  loadBalancerIP: 10.1.12.21
