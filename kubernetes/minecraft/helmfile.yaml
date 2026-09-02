@@ -2,6 +2,8 @@ repositories:
   - name: itzg
     url: https://itzg.github.io/minecraft-server-charts
 
+# TODO: Add a Kubernetes-native backup path for the Paper data volume so the
+# world can be snapshotted on a schedule without relying on node-local jobs.
 releases:
   - name: minecraft-server
     namespace: minecraft

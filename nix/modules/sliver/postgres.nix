@@ -180,8 +180,8 @@ in
     };
 
     # TODO: Run pgBackRest from Kubernetes once the cluster exists. The backup
-    # schedule and ad hoc check job fit better as CronJobs than as node-local
-    # systemd timers and oneshot services.
+    # schedule, ad hoc check job, and related operational hooks fit better as
+    # CronJobs than as node-local systemd timers and oneshot services.
     services.pgbackrest = {
       enable = true;
       settings = {
