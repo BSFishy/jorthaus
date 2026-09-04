@@ -1,0 +1,7 @@
+releases:
+  - name: postgres-backup
+    namespace: postgres-backup
+    createNamespace: true
+    chart: ./config-chart
+    values:
+      - values/postgres-backup.yaml

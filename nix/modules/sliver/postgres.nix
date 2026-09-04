@@ -24,33 +24,82 @@ let
   stagedCertFile = "${tlsDir}/fullchain.pem";
   stagedKeyFile = "${tlsDir}/key.pem";
   caFile = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-  backupSecretName = "pgbackrest-b2-env";
-  backupStanza = patroniScope;
-  backupRepoName = "b2";
-  backupRepoPath = "/jorthaus-postgres";
-  backupSpoolDir = "/srv/pgbackrest/spool";
-  backupHosts = lib.sort (a: b: a.hostname < b.hostname) (
-    lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
-  );
-  backupHost = lib.head backupHosts;
-  backupEnvFile = config.age.secrets.${backupSecretName}.path;
-  pgbackrestWrapper = pkgs.writeShellScriptBin "jorthaus-pgbackrest" ''
-    set -eu
-    set -a
-    . ${backupEnvFile}
-    set +a
-    export PGPASSWORD="$(tr -d '\n' < ${config.age.secrets.patroni-postgres-superuser-password.path})"
-    exec ${lib.getExe pkgs.pgbackrest} "$@"
-  '';
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
   );
+  postgresBootstrapHost = if postgresHosts == [ ] then null else lib.head postgresHosts;
   etcdHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.etcd.enable) (builtins.attrValues hostInventory)
   );
   etcdHostsConfig = lib.concatStringsSep "," (
     map (peer: "${peer.hostname}.node.jort.haus:2379") etcdHosts
   );
+  walGAppRoleName = "postgres-wal-g";
+  walGRoleIdSecretName = "postgres-wal-g-approle-role-id";
+  walGSecretIdSecretName = "postgres-wal-g-approle-secret-id";
+  walGRoleIdFile = config.age.secrets.${walGRoleIdSecretName}.path;
+  walGSecretIdFile = config.age.secrets.${walGSecretIdSecretName}.path;
+  walGAgentDir = "/run/postgres-wal-g";
+  walGEnvFile = "${walGAgentDir}/wal-g.env";
+  walGBackupRole = "postgres_backup";
+  walGWrapper = pkgs.writeShellScriptBin "jorthaus-wal-g" ''
+    set -euo pipefail
+
+    for _ in $(seq 1 30); do
+      if [ -f ${walGEnvFile} ]; then
+        break
+      fi
+      sleep 1
+    done
+
+    [ -f ${walGEnvFile} ]
+
+    set -a
+    . ${walGEnvFile}
+    set +a
+
+    export WALG_S3_CA_CERT_FILE=${caFile}
+
+    exec ${lib.getExe pkgs.wal-g} "$@"
+  '';
+  walGRestoreWrapper = pkgs.writeShellScriptBin "jorthaus-wal-g-wal-fetch" ''
+    set -euo pipefail
+
+    if ${lib.getExe walGWrapper} wal-fetch "$1" "$2"; then
+      exit 0
+    else
+      status=$?
+    fi
+
+    if [ "$status" -eq 74 ]; then
+      exit 74
+    fi
+
+    exit 255
+  '';
+  postgresBackupBootstrap = pkgs.writeShellScriptBin "jorthaus-postgres-backup-bootstrap" ''
+    set -euo pipefail
+
+    export PGPASSWORD="$(tr -d '\n' < ${config.age.secrets.patroni-postgres-superuser-password.path})"
+    psql_base=(
+      ${lib.getExe' pkgs.postgresql "psql"}
+      "postgresql://postgres.service.jort.haus:5432/postgres?user=postgres&sslmode=verify-full&sslrootcert=system"
+    )
+
+    "''${psql_base[@]}" <<'SQL'
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${walGBackupRole}') THEN
+        CREATE ROLE ${walGBackupRole} LOGIN REPLICATION;
+      END IF;
+    END
+    $$;
+
+    ALTER ROLE ${walGBackupRole} WITH LOGIN REPLICATION CONNECTION LIMIT 5;
+    GRANT pg_monitor TO ${walGBackupRole};
+    GRANT CONNECT ON DATABASE postgres TO ${walGBackupRole};
+    SQL
+  '';
 in
 {
   config = lib.mkIf enabled {
@@ -86,11 +135,20 @@ in
       mode = "0400";
     };
 
-    age.secrets.${backupSecretName} = {
-      file = ../../../secrets/pgbackrest-b2-env.age;
+    # PostgreSQL nodes authenticate to OpenBao with a small AppRole bootstrap so
+    # WAL archival can read B2 credentials without storing them in the repo.
+    age.secrets.${walGRoleIdSecretName} = {
+      file = ../../../secrets/postgres-wal-g-approle-role-id.age;
       owner = "patroni";
-      group = "pgbackrest";
-      mode = "0440";
+      group = "patroni";
+      mode = "0400";
+    };
+
+    age.secrets.${walGSecretIdSecretName} = {
+      file = ../../../secrets/postgres-wal-g-approle-secret-id.age;
+      owner = "patroni";
+      group = "patroni";
+      mode = "0400";
     };
 
     jorthaus.persistence.directories = [
@@ -106,18 +164,11 @@ in
         group = "patroni";
         mode = "0700";
       }
-      {
-        directory = "/srv/pgbackrest";
-        user = "patroni";
-        group = "patroni";
-        mode = "0700";
-      }
     ];
 
     systemd.tmpfiles.rules = [
       "d ${tlsDir} 0700 patroni patroni -"
-      "d /run/pgbackrest 0700 patroni patroni -"
-      "d ${backupSpoolDir} 0700 patroni patroni -"
+      "d ${walGAgentDir} 0750 patroni patroni -"
     ];
 
     # TODO: Tighten Postgres and Patroni firewall exposure to the minimum set
@@ -128,14 +179,92 @@ in
       restApiPort
     ];
 
+    services.vault-agent.instances.${walGAppRoleName} = {
+      package = pkgs.openbao;
+      user = "patroni";
+      group = "patroni";
+      settings = {
+        pid_file = "${walGAgentDir}/vault-agent.pid";
+
+        vault = {
+          address = "https://openbao.service.jort.haus:8200";
+          tls_server_name = "openbao.service.jort.haus";
+          ca_cert = caFile;
+        };
+
+        auto_auth = [
+          {
+            method = [
+              {
+                type = "approle";
+                mount_path = "auth/approle";
+                config = {
+                  role_id_file_path = walGRoleIdFile;
+                  secret_id_file_path = walGSecretIdFile;
+                  remove_secret_id_file_after_reading = false;
+                };
+              }
+            ];
+
+            sink = [
+              {
+                type = "file";
+                config = {
+                  path = "${walGAgentDir}/openbao.token";
+                  mode = 256;
+                };
+              }
+            ];
+          }
+        ];
+
+        template_config.static_secret_render_interval = "5m";
+
+        template = [
+          {
+            destination = walGEnvFile;
+            perms = 288;
+            contents = ''
+              {{- with secret "backup/data/postgres" }}
+              AWS_ACCESS_KEY_ID={{ printf "%q" .Data.data.aws_access_key_id }}
+              AWS_SECRET_ACCESS_KEY={{ printf "%q" .Data.data.aws_secret_access_key }}
+              AWS_ENDPOINT={{ printf "%q" .Data.data.aws_endpoint }}
+              AWS_REGION={{ printf "%q" .Data.data.aws_region }}
+              WALG_S3_PREFIX={{ printf "%q" .Data.data.walg_s3_prefix }}
+              AWS_S3_FORCE_PATH_STYLE=true
+              WALG_PREVENT_WAL_OVERWRITE=true
+              {{- end }}
+            '';
+          }
+        ];
+      };
+    };
+
+    systemd.services.vault-agent-postgres-wal-g = {
+      after = [
+        "network-online.target"
+        "agenix.service"
+      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      wants = [
+        "network-online.target"
+        "agenix.service"
+      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      serviceConfig = {
+        RuntimeDirectory = lib.mkForce "postgres-wal-g";
+        RuntimeDirectoryMode = lib.mkForce "0750";
+      };
+    };
+
     systemd.services.patroni = {
       after = [
         "network-online.target"
         "var-lib-acme.mount"
+        "vault-agent-postgres-wal-g.service"
       ];
       wants = [
         "network-online.target"
         "var-lib-acme.mount"
+        "vault-agent-postgres-wal-g.service"
       ];
       unitConfig = {
         RequiresMountsFor = [
@@ -179,111 +308,31 @@ in
       wants = [ "patroni.service" ];
     };
 
-    # TODO: Run pgBackRest from Kubernetes once the cluster exists. The backup
-    # schedule, ad hoc check job, and related operational hooks fit better as
-    # CronJobs than as node-local systemd timers and oneshot services.
-    services.pgbackrest = {
-      enable = true;
-      settings = {
-        lock-path = "/run/pgbackrest";
-        spool-path = backupSpoolDir;
-        start-fast = true;
-        compress-type = "zst";
-        process-max = 2;
-      };
-      repos.${backupRepoName} = {
-        type = "s3";
-        path = backupRepoPath;
-        s3-uri-style = "path";
-        retention-full = 2;
-        retention-diff = 6;
-        retention-archive = 2;
-        retention-archive-type = "full";
-      };
-      stanzas.${backupStanza} = {
-        instances.localhost = {
-          path = postgresDataDir;
-          port = postgresPort;
-          socket-path = "/run/postgresql";
-          user = "postgres";
-        };
-        settings = {
-          archive-check = true;
-        };
-      };
-    };
-
-    environment.systemPackages = [ pgbackrestWrapper ];
-
-    users.users.patroni.extraGroups = [ "pgbackrest" ];
+    environment.systemPackages = [
+      postgresBackupBootstrap
+      walGWrapper
+      walGRestoreWrapper
+    ];
 
     # TODO: Keep database bootstrap and other cluster-scoped setup work out of
     # long-lived systemd units once a cleaner activation-time pattern exists.
-    systemd.services.jorthaus-pgbackrest-check = {
-      description = "Check pgBackRest stanza ${backupStanza}";
-      after = [ "network-online.target" "patroni.service" ];
-      wants = [ "network-online.target" "patroni.service" ];
-      unitConfig.RequiresMountsFor = [ postgresDataDir "/srv/pgbackrest" ];
+    systemd.services.jorthaus-postgres-backup-bootstrap = lib.mkIf (postgresBootstrapHost != null && host.hostname == postgresBootstrapHost.hostname) {
+      description = "Ensure the PostgreSQL physical backup role exists";
+      wantedBy = [ "multi-user.target" ];
+      after = [
+        "network-online.target"
+        "patroni.service"
+        "haproxy.service"
+      ];
+      wants = [
+        "network-online.target"
+        "patroni.service"
+        "haproxy.service"
+      ];
       serviceConfig = {
         Type = "oneshot";
-        User = "patroni";
-        Group = "patroni";
-      };
-      script = ''
-        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} stanza-create
-        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} check
-      '';
-    };
-
-    systemd.services.jorthaus-pgbackrest-backup-full = lib.mkIf (host.hostname == backupHost.hostname) {
-      description = "Run full pgBackRest backup for ${backupStanza}";
-      after = [ "network-online.target" "patroni.service" ];
-      wants = [ "network-online.target" "patroni.service" ];
-      unitConfig.RequiresMountsFor = [ postgresDataDir "/srv/pgbackrest" ];
-      serviceConfig = {
-        Type = "oneshot";
-        User = "patroni";
-        Group = "patroni";
-      };
-      script = ''
-        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} stanza-create
-        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} backup --type=full
-      '';
-    };
-
-    systemd.services.jorthaus-pgbackrest-backup-diff = lib.mkIf (host.hostname == backupHost.hostname) {
-      description = "Run differential pgBackRest backup for ${backupStanza}";
-      after = [ "network-online.target" "patroni.service" ];
-      wants = [ "network-online.target" "patroni.service" ];
-      unitConfig.RequiresMountsFor = [ postgresDataDir "/srv/pgbackrest" ];
-      serviceConfig = {
-        Type = "oneshot";
-        User = "patroni";
-        Group = "patroni";
-      };
-      script = ''
-        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} stanza-create
-        ${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} backup --type=diff
-      '';
-    };
-
-    systemd.timers.jorthaus-pgbackrest-backup-full = lib.mkIf (host.hostname == backupHost.hostname) {
-      description = "Weekly full pgBackRest backup for ${backupStanza}";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnCalendar = "Sun *-*-* 03:15:00 UTC";
-        Persistent = true;
-        Unit = "jorthaus-pgbackrest-backup-full.service";
-      };
-    };
-
-    systemd.timers.jorthaus-pgbackrest-backup-diff = lib.mkIf (host.hostname == backupHost.hostname) {
-      description = "Daily differential pgBackRest backup for ${backupStanza}";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnCalendar = "Mon..Sat *-*-* 03:15:00 UTC";
-        Persistent = true;
-        Unit = "jorthaus-pgbackrest-backup-diff.service";
+        User = "root";
+        ExecStart = lib.getExe postgresBackupBootstrap;
       };
     };
 
@@ -348,7 +397,7 @@ in
                 password_encryption = "scram-sha-256";
                 archive_mode = "on";
                 archive_timeout = "60s";
-                archive_command = "${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} archive-push %p";
+                archive_command = "${lib.getExe walGWrapper} wal-push %p";
               };
             };
           };
@@ -379,13 +428,14 @@ in
             ssl_key_file = stagedKeyFile;
             archive_mode = "on";
             archive_timeout = "60s";
-            archive_command = "${lib.getExe pgbackrestWrapper} --stanza=${backupStanza} archive-push %p";
+            archive_command = "${lib.getExe walGWrapper} wal-push %p";
           };
 
           pg_hba = [
             "local all all scram-sha-256"
             "local replication replicator scram-sha-256"
             "hostssl replication replicator ${postgresNetwork} scram-sha-256"
+            "hostssl replication ${walGBackupRole} ${postgresNetwork} scram-sha-256"
             "hostssl all all ${postgresNetwork} scram-sha-256"
           ];
         };

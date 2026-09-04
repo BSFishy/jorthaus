@@ -1,108 +1,122 @@
 # postgres backups
 
-This repository uses pgBackRest for PostgreSQL base backups and WAL archiving.
+This repository uses WAL-G for PostgreSQL physical backups and WAL archiving.
 
 ## Topology
 
-All PostgreSQL nodes render the same pgBackRest configuration and archive WAL to
-Backblaze B2 through the S3-compatible API.
+The backup path has two parts:
 
-The current deployment state is:
+- PostgreSQL nodes archive WAL locally through `archive_command`
+- Kubernetes schedules remote physical base backups through the PostgreSQL `BASE_BACKUP` protocol
+
+The current deployment shape is:
 
 - WAL archiving runs from the active primary through `archive_command`
-- the pgBackRest stanza name is `jorthaus-postgres`
-- scheduled base backups run on `gaia-01`
-- the repository path inside B2 is `/jorthaus-postgres`
+- Kubernetes runs one remote physical base backup per day
+- Kubernetes prunes old base backups after the backup window
+- WAL and base backups live in Backblaze B2 through its S3-compatible API
+- the WAL-G storage prefix lives at `backup/data/postgres` in OpenBao
+- the Kubernetes backup workload reads PostgreSQL credentials from `postgres/static-creds/postgres-backup`
 
-## Configuration
+The running PostgreSQL cluster remains on the metal nodes under Patroni.
+Kubernetes does not mount `/srv/postgres/...`.
 
-The Postgres sliver configures:
+## Node-local archiving
+
+All PostgreSQL nodes install `jorthaus-wal-g` and archive with:
 
 - `archive_mode = on`
 - `archive_timeout = 60s`
-- `archive_command = jorthaus-pgbackrest --stanza=jorthaus-postgres archive-push %p`
-- pgBackRest compression with `zst`
-- retention:
-  - `repo1-retention-full = 2`
-  - `repo1-retention-diff = 6`
-  - `repo1-retention-archive = 2`
-  - `repo1-retention-archive-type = full`
+- `archive_command = jorthaus-wal-g wal-push %p`
 
-The generated pgBackRest config lives at:
+`jorthaus-wal-g` reads its B2 settings from the OpenBao-rendered env file:
 
-- `/etc/pgbackrest/pgbackrest.conf`
+- `/run/postgres-wal-g/wal-g.env`
 
-The B2 credentials live in the agenix secret:
+The PostgreSQL nodes authenticate to OpenBao with the AppRole bootstrap files:
 
-- `secrets/pgbackrest-b2-env.age`
+- `secrets/postgres-wal-g-approle-role-id.age`
+- `secrets/postgres-wal-g-approle-secret-id.age`
 
-The runtime secret path on each node is:
+The rendered env contains the storage settings WAL-G needs:
 
-- `/run/agenix/pgbackrest-b2-env`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_ENDPOINT`
+- `AWS_REGION`
+- `WALG_S3_PREFIX`
+- `AWS_S3_FORCE_PATH_STYLE=true`
+- `WALG_PREVENT_WAL_OVERWRITE=true`
 
-## Local state
+## Kubernetes base backups
 
-pgBackRest uses:
+The Kubernetes backup subject lives under:
 
-- lock path: `/run/pgbackrest`
-- spool path: `/srv/pgbackrest/spool`
+- `kubernetes/postgres-backup/`
 
-The Postgres data directory remains:
+It defines:
 
-- `/srv/postgres/18`
+- `CronJob/postgres-backup`
+- `CronJob/postgres-backup-prune`
+- `ServiceAccount/postgres-backup`
+- `SecretProviderClass/postgres-backup-openbao`
 
-## Scheduled backups
+The backup job:
 
-`gaia-01` owns the scheduled backup timers:
+- authenticates to OpenBao through Secrets Store CSI
+- reads B2 settings from `backup/data/postgres`
+- reads PostgreSQL credentials from `postgres/static-creds/postgres-backup`
+- connects to `postgres.service.jort.haus:5432` with TLS verification
+- runs `wal-g backup-push --verify`
+- verifies repository visibility with `wal-g backup-list --detail --json`
+- verifies WAL continuity with `wal-g wal-verify integrity timeline --json`
 
-- `jorthaus-pgbackrest-backup-diff.timer`
-  - `Mon..Sat 03:15:00 UTC`
-- `jorthaus-pgbackrest-backup-full.timer`
-  - `Sun 03:15:00 UTC`
+The backup job uses the existing Postgres read/write service endpoint. That
+keeps the selection logic simple and directs the `BASE_BACKUP` session at the
+current primary.
 
-The corresponding services are:
+## Schedule and retention
 
-- `jorthaus-pgbackrest-backup-diff.service`
-- `jorthaus-pgbackrest-backup-full.service`
+The default schedule is:
 
-## Verification
+- base backup: `15 03 * * *` UTC
+- prune: `15 05 * * *` UTC
 
-A healthy node reports:
+The prune job keeps:
 
-```bash
-sudo -u patroni sh -c '
-  PGPASSWORD=$(tr -d "\n" < /run/agenix/patroni-postgres-superuser-password)
-  psql "host=/run/postgresql dbname=postgres user=postgres" -Atc "
-    show archive_mode;
-    show archive_command;
-    show archive_timeout;
-  "
-'
-```
+- `14` full base backups
 
-The cluster backup state is visible from `gaia-01` with:
+It enforces retention with:
 
-```bash
-sudo -u patroni sh -c '
-  set -a
-  . /run/agenix/pgbackrest-b2-env
-  set +a
-  export PGPASSWORD=$(tr -d "\n" < /run/agenix/patroni-postgres-superuser-password)
-  /run/current-system/sw/bin/jorthaus-pgbackrest --stanza=jorthaus-postgres info
-'
-```
+- `wal-g delete retain FULL 14 --use-sentinel-time --confirm`
 
-A stanza check is available on every Postgres node:
+`concurrencyPolicy: Forbid` prevents overlapping jobs.
 
-```bash
-sudo systemctl start jorthaus-pgbackrest-check
-journalctl -u jorthaus-pgbackrest-check --no-pager -n 50
-```
+## PostgreSQL backup identity
 
-## Current backup set
+The physical backup workflow uses the dedicated PostgreSQL role:
 
-The current deployment has produced an initial full backup for stanza
-`jorthaus-postgres`.
+- `postgres_backup`
 
-Inspect the current repository state with `pgbackrest info` rather than relying
-on static timestamps in this document.
+That role is created by the node-local bootstrap unit:
+
+- `jorthaus-postgres-backup-bootstrap.service`
+
+The role keeps:
+
+- `LOGIN`
+- `REPLICATION`
+- `pg_monitor`
+- `CONNECT` on the `postgres` database
+
+OpenBao rotates its password through the static role path:
+
+- `postgres/static-creds/postgres-backup`
+
+## Legacy pgBackRest data
+
+The previous pgBackRest repository remains a legacy recovery source in B2.
+This migration does not rewrite or delete the old pgBackRest objects.
+
+Use the WAL-G path for current operations. Treat the pgBackRest repository as a
+separate legacy recovery source until you intentionally retire it.

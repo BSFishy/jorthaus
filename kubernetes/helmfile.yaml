@@ -4,4 +4,5 @@ helmfiles:
   - path: seaweedfs-csi/helmfile.yaml
   - path: kured/helmfile.yaml
   - path: traefik/helmfile.yaml
+  - path: postgres-backup/helmfile.yaml
   - path: minecraft/helmfile.yaml
