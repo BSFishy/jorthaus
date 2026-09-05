@@ -96,6 +96,7 @@
               cilium-cli
               pkgs25.helmfile
               pkgs25.kubernetes-helm
+              openssl
             ];
           };
         };

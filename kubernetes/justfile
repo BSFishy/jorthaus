@@ -43,3 +43,19 @@ k8s-apply subject='':
   fi
 
   helmfile -f "$state" sync
+
+# create or rotate a Kubernetes Secret key with a random base64 value
+[script]
+[group('kubernetes')]
+k8s-random-secret namespace secret key bytes='32':
+  password="$(openssl rand -base64 {{bytes}})"
+  kubectl -n {{namespace}} create secret generic {{secret}} \
+    --from-literal={{key}}="$password" \
+    --dry-run=client \
+    -o yaml \
+    | kubectl apply -f -
+
+# create or rotate the Minecraft server RCON password Secret
+[group('kubernetes')]
+minecraft-rcon-secret:
+  just k8s-random-secret minecraft minecraft-server-rcon rcon-password

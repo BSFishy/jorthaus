@@ -30,6 +30,11 @@ minecraftServer:
     ALLOW_FLIGHT: "TRUE"
   spawnProtection: 0
   serviceType: ClusterIP
+  rcon:
+    enabled: true
+    existingSecret: minecraft-server-rcon
+    secretKey: rcon-password
+    serviceType: ClusterIP
 
 persistence:
   storageClass: seaweedfs-storage
