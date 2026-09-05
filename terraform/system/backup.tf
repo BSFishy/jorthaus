@@ -32,6 +32,16 @@ resource "vault_policy" "postgres_backup_csi" {
   EOT
 }
 
+resource "vault_policy" "minecraft_backup_csi" {
+  name = "minecraft-backup-csi"
+
+  policy = <<-EOT
+    path "backup/data/minecraft" {
+      capabilities = ["read"]
+    }
+  EOT
+}
+
 resource "vault_approle_auth_backend_role" "postgres_wal_g" {
   backend        = vault_auth_backend.approle.path
   role_name      = "postgres-wal-g"
@@ -54,6 +64,20 @@ resource "vault_kubernetes_auth_backend_role" "postgres_backup" {
   bound_service_account_namespaces = ["postgres-backup"]
   audience                         = "vault"
   token_policies                   = [vault_policy.postgres_backup_csi.name]
+
+  token_type    = "service"
+  token_period  = 86400
+  token_ttl     = 3600
+  token_max_ttl = 14400
+}
+
+resource "vault_kubernetes_auth_backend_role" "minecraft_backup" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "minecraft-backup"
+  bound_service_account_names      = ["minecraft-backup-secret-sync"]
+  bound_service_account_namespaces = ["minecraft"]
+  audience                         = "vault"
+  token_policies                   = [vault_policy.minecraft_backup_csi.name]
 
   token_type    = "service"
   token_period  = 86400

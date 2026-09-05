@@ -5,10 +5,17 @@ repositories:
 # TODO: Add a Kubernetes-native backup path for the Paper data volume so the
 # world can be snapshotted on a schedule without relying on node-local jobs.
 releases:
+  - name: minecraft-config
+    namespace: minecraft
+    createNamespace: true
+    chart: ./config-chart
+
   - name: minecraft-server
     namespace: minecraft
     createNamespace: true
     chart: itzg/minecraft
+    needs:
+      - minecraft/minecraft-config
     values:
       - values/server.yaml
 
