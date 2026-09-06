@@ -13,12 +13,16 @@ let
   active = enabled || bootstrapOnly;
   role = host.slivers.k3s.role;
   k3sHosts = lib.sort (a: b: a.hostname < b.hostname) (
-    lib.filter (peer: peer.slivers.k3s.enable || peer.slivers.k3s.bootstrapOnly) (builtins.attrValues hostInventory)
-  );
-  controlplaneHosts = lib.sort (a: b: a.hostname < b.hostname) (
-    lib.filter (peer: (peer.slivers.k3s.enable || peer.slivers.k3s.bootstrapOnly) && peer.slivers.k3s.role == "controlplane") (
+    lib.filter (peer: peer.slivers.k3s.enable || peer.slivers.k3s.bootstrapOnly) (
       builtins.attrValues hostInventory
     )
+  );
+  controlplaneHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (
+      peer:
+      (peer.slivers.k3s.enable || peer.slivers.k3s.bootstrapOnly)
+      && peer.slivers.k3s.role == "controlplane"
+    ) (builtins.attrValues hostInventory)
   );
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
@@ -29,7 +33,8 @@ let
   dataplaneEnabled = enabled && role == "dataplane";
   stableApiHost = "k8s.service.jort.haus";
   stableApiAddress = "10.1.11.16";
-  bootstrapApiDnsName = if bootstrapHost == null then null else "${bootstrapHost.hostname}.node.jort.haus";
+  bootstrapApiDnsName =
+    if bootstrapHost == null then null else "${bootstrapHost.hostname}.node.jort.haus";
   apiPort = 6443;
   ciliumGenevePort = 6081;
   rebootSentinelFile = "/var/run/reboot-required";
@@ -61,42 +66,6 @@ let
       "localhost"
     ]
   );
-  postgresBootstrap = pkgs.writeShellScriptBin "jorthaus-k3s-postgres-bootstrap" ''
-    set -euo pipefail
-
-    export PGPASSWORD="$(tr -d '\n' < ${config.age.secrets.patroni-postgres-superuser-password.path})"
-    psql_base=(
-      ${lib.getExe' pkgs.postgresql "psql"}
-      "postgresql://postgres.service.jort.haus:5432/postgres?user=postgres&sslmode=verify-full&sslrootcert=system"
-    )
-
-    "''${psql_base[@]}" <<'SQL'
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'k3s') THEN
-        CREATE ROLE k3s LOGIN;
-      END IF;
-    END
-    $$;
-    SQL
-
-    if ! "''${psql_base[@]}" -tAc "SELECT 1 FROM pg_database WHERE datname = 'k3s'" | grep -q 1; then
-      "''${psql_base[@]}" -c 'CREATE DATABASE k3s OWNER k3s'
-    fi
-
-    "''${psql_base[@]}" <<'SQL'
-    ALTER DATABASE k3s OWNER TO k3s;
-    SQL
-
-    ${lib.getExe' pkgs.postgresql "psql"} "postgresql://postgres.service.jort.haus:5432/k3s?user=postgres&sslmode=verify-full&sslrootcert=system" <<'SQL'
-    ALTER SCHEMA public OWNER TO k3s;
-    GRANT ALL ON SCHEMA public TO k3s;
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO k3s;
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO k3s;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO k3s;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO k3s;
-    SQL
-  '';
 in
 {
   options.jorthaus.k3s = {
@@ -334,35 +303,29 @@ in
       after = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       wants = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       serviceConfig = {
         RuntimeDirectory = lib.mkForce "k3s-agent";
         RuntimeDirectoryMode = lib.mkForce "0750";
       };
     };
 
-    environment.systemPackages = [ postgresBootstrap ];
+    jorthaus.postgres.ensure = {
+      users.k3s.login = true;
 
-    systemd.services.jorthaus-k3s-postgres-bootstrap = lib.mkIf (cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname) {
-      description = "Ensure the k3s PostgreSQL role and database exist";
-      after = [
-        "network-online.target"
-        "patroni.service"
-        "haproxy.service"
-      ];
-      wants = [
-        "network-online.target"
-        "patroni.service"
-        "haproxy.service"
-      ];
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-        ExecStart = lib.getExe postgresBootstrap;
+      databases.k3s = {
+        owner = "k3s";
+        schemas.public = {
+          owner = "k3s";
+          grantAllTo = [ "k3s" ];
+          defaultPrivilegesFor = [ "k3s" ];
+        };
       };
     };
 
@@ -407,6 +370,16 @@ in
 
     # This cluster starts without the built-in flannel dataplane so a
     # dedicated CNI such as Cilium can own pod networking from the outset.
+    systemd.services.k3s =
+      lib.mkIf
+        (
+          enabled && cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname
+        )
+        {
+          after = [ "jorthaus-postgres-ensure.service" ];
+          wants = [ "jorthaus-postgres-ensure.service" ];
+        };
+
     services.k3s = lib.mkIf enabled {
       enable = true;
       role = if controlplaneEnabled then "server" else "agent";
@@ -421,7 +394,8 @@ in
         "--write-kubeconfig-mode=0640"
         "--disable-network-policy"
         "--flannel-backend=none"
-      ] ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
+      ]
+      ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
     };
 
     # TODO: Move k3s datastore bootstrap into the long-term activation-time

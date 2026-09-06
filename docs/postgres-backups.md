@@ -98,9 +98,10 @@ The physical backup workflow uses the dedicated PostgreSQL role:
 
 - `postgres_backup`
 
-That role is created by the node-local bootstrap unit:
+That role is maintained by the centralized PostgreSQL ensure unit on the
+Postgres bootstrap host:
 
-- `jorthaus-postgres-backup-bootstrap.service`
+- `jorthaus-postgres-ensure.service`
 
 The role keeps:
 

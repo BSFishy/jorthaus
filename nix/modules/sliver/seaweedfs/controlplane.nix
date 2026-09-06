@@ -31,18 +31,23 @@ let
     done
   '';
   applyPathReplication = pkgs.writeShellScript "jorthaus-seaweedfs-apply-path-replication" ''
-    set -euo pipefail
+        set -euo pipefail
 
-    for _ in $(seq 1 30); do
-      if ${lib.getExe pkgs.curl} -fsS http://127.0.0.1:${toString cfg.filer.port}/ >/dev/null 2>&1; then
-        break
-      fi
-      sleep 1
-    done
+        for _ in $(seq 1 30); do
+          if ${lib.getExe pkgs.curl} -fsS http://127.0.0.1:${toString cfg.filer.port}/ >/dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
 
-    printf '%s\n' \
-${lib.concatMapStringsSep " \\\n" (rule: "      ${lib.escapeShellArg "fs.configure -locationPrefix=${rule.locationPrefix} -replication=${rule.replication} -volumeGrowthCount=${toString rule.volumeGrowthCount} -apply"}") cfg.pathReplication} \
-      | ${lib.getExe' pkgs.seaweedfs "weed"} shell -master=127.0.0.1:${toString cfg.master.port} -filer=127.0.0.1:${toString cfg.filer.port}
+        printf '%s\n' \
+    ${
+      lib.concatMapStringsSep " \\\n" (
+        rule:
+        "      ${lib.escapeShellArg "fs.configure -locationPrefix=${rule.locationPrefix} -replication=${rule.replication} -volumeGrowthCount=${toString rule.volumeGrowthCount} -apply"}"
+      ) cfg.pathReplication
+    } \
+          | ${lib.getExe' pkgs.seaweedfs "weed"} shell -master=127.0.0.1:${toString cfg.master.port} -filer=127.0.0.1:${toString cfg.filer.port}
   '';
   renderFilerToml = pkgs.writeShellScript "jorthaus-seaweedfs-render-filer-toml" ''
     set -eu
@@ -98,42 +103,6 @@ ${lib.concatMapStringsSep " \\\n" (rule: "      ${lib.escapeShellArg "fs.configu
 
     chown seaweedfs-filer:seaweedfs ${filerTomlPath}
     chmod 0400 ${filerTomlPath}
-  '';
-  postgresBootstrap = pkgs.writeShellScript "jorthaus-seaweedfs-postgres-bootstrap" ''
-    set -eu
-
-    export PGPASSWORD="$(tr -d '\n' < ${config.age.secrets.patroni-postgres-superuser-password.path})"
-    psql_base=(
-      ${lib.getExe' pkgs.postgresql "psql"}
-      "postgresql://postgres.service.jort.haus:5432/postgres?user=postgres&sslmode=verify-full&sslrootcert=system"
-    )
-
-    "''${psql_base[@]}" <<'SQL'
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'seaweedfs') THEN
-        CREATE ROLE seaweedfs LOGIN;
-      END IF;
-    END
-    $$;
-    SQL
-
-    if ! "''${psql_base[@]}" -tAc "SELECT 1 FROM pg_database WHERE datname = 'seaweedfs'" | grep -q 1; then
-      "''${psql_base[@]}" -c 'CREATE DATABASE seaweedfs OWNER seaweedfs'
-    fi
-
-    "''${psql_base[@]}" <<'SQL'
-    ALTER DATABASE seaweedfs OWNER TO seaweedfs;
-    SQL
-
-    ${lib.getExe' pkgs.postgresql "psql"} "postgresql://postgres.service.jort.haus:5432/seaweedfs?user=postgres&sslmode=verify-full&sslrootcert=system" <<'SQL'
-    ALTER SCHEMA public OWNER TO seaweedfs;
-    GRANT ALL ON SCHEMA public TO seaweedfs;
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO seaweedfs;
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO seaweedfs;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO seaweedfs;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO seaweedfs;
-    SQL
   '';
 in
 {
@@ -342,15 +311,30 @@ in
         "var-lib-acme.mount"
         "vault-agent-seaweedfs.service"
         "jorthaus-seaweedfs-pki-renew.service"
-      ];
+      ]
+      ++
+        lib.optionals
+          (cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname)
+          [
+            "jorthaus-postgres-ensure.service"
+          ];
       wants = [
         "network-online.target"
         "var-lib-acme.mount"
         "vault-agent-seaweedfs.service"
         "jorthaus-seaweedfs-pki-renew.service"
-      ];
+      ]
+      ++
+        lib.optionals
+          (cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname)
+          [
+            "jorthaus-postgres-ensure.service"
+          ];
       unitConfig = {
-        RequiresMountsFor = [ cfg.filer.dir "/var/lib/acme" ];
+        RequiresMountsFor = [
+          cfg.filer.dir
+          "/var/lib/acme"
+        ];
         ConditionPathExists = [
           cfg.tls.certFile
           "${cfg.tls.dir}/jwt.env"
@@ -392,62 +376,57 @@ in
       after = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       wants = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       serviceConfig = {
         RuntimeDirectory = lib.mkForce "seaweedfs-agent-filer";
         RuntimeDirectoryMode = lib.mkForce "0750";
       };
     };
 
-    # TODO: Move this database bootstrap into an idempotent activation-time
-    # setup path once cluster-scoped initialization is no longer modeled as a
-    # boot-time systemd oneshot.
-    systemd.services.jorthaus-seaweedfs-postgres-bootstrap = lib.mkIf (cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname) {
-      description = "Ensure the SeaweedFS PostgreSQL role and database exist";
-      after = [
-        "network-online.target"
-        "patroni.service"
-        "haproxy.service"
-      ];
-      wants = [
-        "network-online.target"
-        "patroni.service"
-        "haproxy.service"
-      ];
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-        ExecStart = postgresBootstrap;
+    jorthaus.postgres.ensure = {
+      users.seaweedfs.login = true;
+
+      databases.seaweedfs = {
+        owner = "seaweedfs";
+        schemas.public = {
+          owner = "seaweedfs";
+          grantAllTo = [ "seaweedfs" ];
+          defaultPrivilegesFor = [ "seaweedfs" ];
+        };
       };
-      wantedBy = [ "multi-user.target" ];
     };
 
     # TODO: Run periodic SeaweedFS maintenance from Kubernetes once the cluster
     # exists. A scheduled weed shell job should handle operations such as
     # volume.fix.replication and, if needed, volume.balance for day-2 repair.
-    systemd.services.jorthaus-seaweedfs-path-replication = lib.mkIf (cfg.controlplaneHosts != [ ] && host.hostname == (lib.head cfg.controlplaneHosts).hostname) {
-      description = "Apply SeaweedFS path-specific replication defaults";
-      after = [
-        "network-online.target"
-        "seaweedfs-master.service"
-        "seaweedfs-filer.service"
-      ];
-      wants = [
-        "network-online.target"
-        "seaweedfs-master.service"
-        "seaweedfs-filer.service"
-      ];
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-        ExecStart = applyPathReplication;
-      };
-      wantedBy = [ "multi-user.target" ];
-    };
+    systemd.services.jorthaus-seaweedfs-path-replication =
+      lib.mkIf
+        (cfg.controlplaneHosts != [ ] && host.hostname == (lib.head cfg.controlplaneHosts).hostname)
+        {
+          description = "Apply SeaweedFS path-specific replication defaults";
+          after = [
+            "network-online.target"
+            "seaweedfs-master.service"
+            "seaweedfs-filer.service"
+          ];
+          wants = [
+            "network-online.target"
+            "seaweedfs-master.service"
+            "seaweedfs-filer.service"
+          ];
+          serviceConfig = {
+            Type = "oneshot";
+            User = "root";
+            ExecStart = applyPathReplication;
+          };
+          wantedBy = [ "multi-user.target" ];
+        };
 
     systemd.services.jorthaus-seaweedfs-credential-refresh = {
       description = "Gracefully restart SeaweedFS services after credential changes";

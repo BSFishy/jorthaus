@@ -27,7 +27,6 @@ let
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
   );
-  postgresBootstrapHost = if postgresHosts == [ ] then null else lib.head postgresHosts;
   etcdHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.etcd.enable) (builtins.attrValues hostInventory)
   );
@@ -77,29 +76,6 @@ let
 
     exit 255
   '';
-  postgresBackupBootstrap = pkgs.writeShellScriptBin "jorthaus-postgres-backup-bootstrap" ''
-    set -euo pipefail
-
-    export PGPASSWORD="$(tr -d '\n' < ${config.age.secrets.patroni-postgres-superuser-password.path})"
-    psql_base=(
-      ${lib.getExe' pkgs.postgresql "psql"}
-      "postgresql://postgres.service.jort.haus:5432/postgres?user=postgres&sslmode=verify-full&sslrootcert=system"
-    )
-
-    "''${psql_base[@]}" <<'SQL'
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${walGBackupRole}') THEN
-        CREATE ROLE ${walGBackupRole} LOGIN REPLICATION;
-      END IF;
-    END
-    $$;
-
-    ALTER ROLE ${walGBackupRole} WITH LOGIN REPLICATION CONNECTION LIMIT 5;
-    GRANT pg_monitor TO ${walGBackupRole};
-    GRANT CONNECT ON DATABASE postgres TO ${walGBackupRole};
-    SQL
-  '';
 in
 {
   config = lib.mkIf enabled {
@@ -122,14 +98,14 @@ in
     # bootstrap ring should remain, but steady-state database secrets should not
     # live as encrypted repo files.
     age.secrets.patroni-postgres-superuser-password = {
-      file = ../../../secrets/patroni-postgres-superuser-password.age;
+      file = ../../../../secrets/patroni-postgres-superuser-password.age;
       owner = "patroni";
       group = "patroni";
       mode = "0400";
     };
 
     age.secrets.patroni-postgres-replication-password = {
-      file = ../../../secrets/patroni-postgres-replication-password.age;
+      file = ../../../../secrets/patroni-postgres-replication-password.age;
       owner = "patroni";
       group = "patroni";
       mode = "0400";
@@ -138,14 +114,14 @@ in
     # PostgreSQL nodes authenticate to OpenBao with a small AppRole bootstrap so
     # WAL archival can read B2 credentials without storing them in the repo.
     age.secrets.${walGRoleIdSecretName} = {
-      file = ../../../secrets/postgres-wal-g-approle-role-id.age;
+      file = ../../../../secrets/postgres-wal-g-approle-role-id.age;
       owner = "patroni";
       group = "patroni";
       mode = "0400";
     };
 
     age.secrets.${walGSecretIdSecretName} = {
-      file = ../../../secrets/postgres-wal-g-approle-secret-id.age;
+      file = ../../../../secrets/postgres-wal-g-approle-secret-id.age;
       owner = "patroni";
       group = "patroni";
       mode = "0400";
@@ -244,11 +220,13 @@ in
       after = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       wants = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       serviceConfig = {
         RuntimeDirectory = lib.mkForce "postgres-wal-g";
         RuntimeDirectoryMode = lib.mkForce "0750";
@@ -309,31 +287,16 @@ in
     };
 
     environment.systemPackages = [
-      postgresBackupBootstrap
       walGWrapper
       walGRestoreWrapper
     ];
 
-    # TODO: Keep database bootstrap and other cluster-scoped setup work out of
-    # long-lived systemd units once a cleaner activation-time pattern exists.
-    systemd.services.jorthaus-postgres-backup-bootstrap = lib.mkIf (postgresBootstrapHost != null && host.hostname == postgresBootstrapHost.hostname) {
-      description = "Ensure the PostgreSQL physical backup role exists";
-      wantedBy = [ "multi-user.target" ];
-      after = [
-        "network-online.target"
-        "patroni.service"
-        "haproxy.service"
-      ];
-      wants = [
-        "network-online.target"
-        "patroni.service"
-        "haproxy.service"
-      ];
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-        ExecStart = lib.getExe postgresBackupBootstrap;
-      };
+    jorthaus.postgres.ensure.users.${walGBackupRole} = {
+      login = true;
+      replication = true;
+      connectionLimit = 5;
+      memberships = [ "pg_monitor" ];
+      databaseGrants.postgres = [ "CONNECT" ];
     };
 
     services.patroni = {
