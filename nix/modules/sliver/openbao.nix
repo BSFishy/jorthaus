@@ -22,6 +22,8 @@ let
   }) openbaoPeerHosts;
 in
 {
+  # TODO: Add a k8s job to snapshot openbao and back up the snapshot to an s3
+  # bucket
   config = lib.mkIf enabled {
     users = {
       users.openbao = {
