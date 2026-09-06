@@ -1,5 +1,6 @@
 configuration:
   rebootSentinel: /var/run/reboot-required
+  rebootCommand: /run/current-system/sw/bin/systemctl reboot
   startTime: "01:00"
   endTime: "05:00"
   timeZone: America/Chicago
