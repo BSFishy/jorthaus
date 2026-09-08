@@ -1,0 +1,31 @@
+authentik:
+  existingSecret:
+    secretName: authentik-config
+
+postgresql:
+  enabled: false
+
+server:
+  replicas: 2
+  ingress:
+    enabled: false
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+worker:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+serviceAccount:
+  create: false

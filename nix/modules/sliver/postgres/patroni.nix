@@ -291,12 +291,27 @@ in
       walGRestoreWrapper
     ];
 
-    jorthaus.postgres.ensure.users.${walGBackupRole} = {
-      login = true;
-      replication = true;
-      connectionLimit = 5;
-      memberships = [ "pg_monitor" ];
-      databaseGrants.postgres = [ "CONNECT" ];
+    jorthaus.postgres.ensure = {
+      users = {
+        authentik.login = false;
+
+        ${walGBackupRole} = {
+          login = true;
+          replication = true;
+          connectionLimit = 5;
+          memberships = [ "pg_monitor" ];
+          databaseGrants.postgres = [ "CONNECT" ];
+        };
+      };
+
+      databases.authentik = {
+        owner = "authentik";
+        schemas.public = {
+          owner = "authentik";
+          grantAllTo = [ "authentik" ];
+          defaultPrivilegesFor = [ "authentik" ];
+        };
+      };
     };
 
     services.patroni = {

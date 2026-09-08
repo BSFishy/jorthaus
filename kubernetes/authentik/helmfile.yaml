@@ -1,0 +1,19 @@
+repositories:
+  - name: authentik
+    url: https://charts.goauthentik.io
+
+releases:
+  - name: authentik-config
+    namespace: authentik
+    createNamespace: true
+    chart: ./config-chart
+
+  - name: authentik
+    namespace: authentik
+    createNamespace: true
+    chart: authentik/authentik
+    version: 2026.8.1
+    needs:
+      - authentik/authentik-config
+    values:
+      - values/authentik.yaml
