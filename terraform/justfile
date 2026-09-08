@@ -14,10 +14,10 @@ apply-infra:
 [group('terraform')]
 [working-directory: 'terraform/system']
 plan-system:
-  tofu plan
+  TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN" tofu plan
 
 # apply terraform changes for system
 [group('terraform')]
 [working-directory: 'terraform/system']
 apply-system:
-  tofu apply
+  TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN" tofu apply

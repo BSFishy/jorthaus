@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jort-haus-wildcard
+  namespace: traefik
+spec:
+  secretName: jort-haus-wildcard-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - jort.haus
+    - '*.jort.haus'

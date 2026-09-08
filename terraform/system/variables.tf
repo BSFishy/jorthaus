@@ -1,3 +1,9 @@
+variable "cloudflare_api_token" {
+  type        = string
+  description = "Cloudflare API token synchronized to OpenBao for in-cluster DNS-01 consumers. The Just recipes set this from CLOUDFLARE_API_TOKEN."
+  sensitive   = true
+}
+
 variable "postgres_admin_password" {
   type        = string
   description = "Administrative PostgreSQL password used by OpenBao for the database connection. Set this with TF_VAR_postgres_admin_password."
