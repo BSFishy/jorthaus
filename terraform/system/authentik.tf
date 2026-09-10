@@ -12,7 +12,7 @@ resource "vault_database_secret_backend_connection" "authentik" {
   backend           = vault_mount.postgres.path
   name              = "authentik"
   plugin_name       = "postgresql-database-plugin"
-  allowed_roles     = ["authentik"]
+  allowed_roles     = ["authentik-static"]
   verify_connection = true
 
   postgresql {
@@ -25,23 +25,15 @@ resource "vault_database_secret_backend_connection" "authentik" {
   }
 }
 
-resource "vault_database_secret_backend_role" "authentik_postgres" {
-  backend = vault_mount.postgres.path
-  name    = "authentik"
-  db_name = vault_database_secret_backend_connection.authentik.name
+resource "vault_database_secret_backend_static_role" "authentik" {
+  backend         = vault_mount.postgres.path
+  name            = "authentik-static"
+  db_name         = vault_database_secret_backend_connection.authentik.name
+  username        = "authentik_app"
+  rotation_period = 15552000
 
-  default_ttl = 1209600
-  max_ttl     = 1814400
-
-  creation_statements = [
-    "CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}';",
-    "GRANT \"authentik\" TO \"{{name}}\";",
-  ]
-
-  revocation_statements = [
-    "REASSIGN OWNED BY \"{{name}}\" TO \"authentik\";",
-    "DROP OWNED BY \"{{name}}\";",
-    "DROP ROLE IF EXISTS \"{{name}}\";",
+  rotation_statements = [
+    "ALTER ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}';"
   ]
 }
 
@@ -84,7 +76,7 @@ resource "vault_policy" "authentik_csi" {
       capabilities = ["read"]
     }
 
-    path "postgres/creds/authentik" {
+    path "postgres/static-creds/authentik-static" {
       capabilities = ["read"]
     }
   EOT
@@ -93,7 +85,7 @@ resource "vault_policy" "authentik_csi" {
 resource "vault_kubernetes_auth_backend_role" "authentik" {
   backend                          = vault_auth_backend.kubernetes.path
   role_name                        = "authentik"
-  bound_service_account_names      = ["authentik-secret-sync"]
+  bound_service_account_names      = ["authentik-csi"]
   bound_service_account_namespaces = ["authentik"]
   audience                         = "vault"
   token_policies                   = [vault_policy.authentik_csi.name]

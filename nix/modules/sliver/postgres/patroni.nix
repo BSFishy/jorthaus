@@ -293,7 +293,13 @@ in
 
     jorthaus.postgres.ensure = {
       users = {
+        # The database owner remains unable to log in. OpenBao manages the
+        # password of this separate application role through a static role.
         authentik.login = false;
+        authentik_app = {
+          login = true;
+          memberships = [ "authentik" ];
+        };
 
         ${walGBackupRole} = {
           login = true;

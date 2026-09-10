@@ -1,12 +1,53 @@
 authentik:
-  existingSecret:
-    secretName: authentik-config
+  # Configuration is supplied as non-secret file:// references to the direct
+  # Secrets Store CSI mount rather than an existing Kubernetes Secret.
+  enabled: false
 
 postgresql:
   enabled: false
 
+global:
+  deploymentStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  env:
+    - name: AUTHENTIK_SECRET_KEY
+      value: file:///run/secrets/jorthaus/static/secret_key
+    - name: AUTHENTIK_BOOTSTRAP_PASSWORD
+      value: file:///run/secrets/jorthaus/static/bootstrap_password
+    - name: AUTHENTIK_BOOTSTRAP_TOKEN
+      value: file:///run/secrets/jorthaus/static/bootstrap_token
+    - name: AUTHENTIK_POSTGRESQL__USER
+      value: file:///run/secrets/jorthaus/static/postgres_username
+    - name: AUTHENTIK_POSTGRESQL__PASSWORD
+      value: file:///run/secrets/jorthaus/static/postgres_password
+    - name: AUTHENTIK_POSTGRESQL__HOST
+      value: file:///run/secrets/jorthaus/static/postgres_host
+    - name: AUTHENTIK_POSTGRESQL__NAME
+      value: file:///run/secrets/jorthaus/static/postgres_name
+    - name: AUTHENTIK_POSTGRESQL__PORT
+      value: file:///run/secrets/jorthaus/static/postgres_port
+    - name: AUTHENTIK_POSTGRESQL__SSLMODE
+      value: file:///run/secrets/jorthaus/static/postgres_sslmode
+    - name: AUTHENTIK_POSTGRESQL__SSLROOTCERT
+      value: file:///run/secrets/jorthaus/static/postgres_sslrootcert
+  volumeMounts:
+    - name: secrets-store
+      mountPath: /run/secrets/jorthaus/static
+      readOnly: true
+  volumes:
+    - name: secrets-store
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: authentik-openbao
+
 server:
   replicas: 2
+  serviceAccountName: authentik-csi
   ingress:
     enabled: false
   service:
@@ -20,6 +61,7 @@ server:
 
 worker:
   replicas: 2
+  serviceAccountName: authentik-csi
   resources:
     requests:
       cpu: 100m
