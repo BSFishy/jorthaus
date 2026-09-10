@@ -13,17 +13,23 @@ global:
 
 ports:
   web:
-    http: &httpPolicy
-      sanitizePath: true
-      aliasHeadersStrategy: reject
-      encodedCharacters:
-        allowEncodedSlash: false
-        allowEncodedBackSlash: false
-        allowEncodedNullCharacter: false
-        allowEncodedSemicolon: false
-        allowEncodedPercent: false
-        allowEncodedQuestionMark: false
-        allowEncodedHash: false
+    http:
+      <<: &httpPolicy
+        sanitizePath: true
+        aliasHeadersStrategy: reject
+        encodedCharacters:
+          allowEncodedSlash: false
+          allowEncodedBackSlash: false
+          allowEncodedNullCharacter: false
+          allowEncodedSemicolon: false
+          allowEncodedPercent: false
+          allowEncodedQuestionMark: false
+          allowEncodedHash: false
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
   websecure:
     http: *httpPolicy
   traefik:
@@ -35,4 +41,4 @@ service:
   type: LoadBalancer
   spec:
     externalTrafficPolicy: Cluster
-  loadBalancerIP: 10.1.12.21
+    loadBalancerIP: 10.1.12.20

@@ -45,6 +45,13 @@ in
         DNSDefaultRoute = false;
       };
 
+      # TODO: Enable dual-stack service networking.
+      #
+      # This requires a routed IPv6 prefix on the uplink, IPv6 BGP peering
+      # between UniFi and Gaia, an IPv6 Cilium LoadBalancer IP pool, and a
+      # dual-stack Traefik Service with fixed IPv4 and IPv6 VIPs. Publish the
+      # resulting Traefik IPv6 VIP as an internal AAAA record and validate
+      # both address families from LAN clients.
       ipv6AcceptRAConfig = {
         UseDNS = false;
         UseDomains = false;
