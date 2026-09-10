@@ -82,28 +82,35 @@ Each chunk record starts with a length, compression byte, and compressed NBT
 payload. A region can be structurally suspicious even when a generic archive or
 restic check succeeds.
 
-Use a Python scanner pod mounted read-only to the scratch PVC to verify active
-region files. A healthy region has zero structural problems and decompresses all
-referenced chunks.
+Use a Python scanner pod mounted read-only to both the scratch PVC and the
+frozen production PVC before selecting a restore candidate. A healthy region
+has zero structural problems and decompresses all referenced chunks. Record
+read errors separately: they can indicate storage-level missing data even when
+an Anvil header is structurally valid.
 
-The known house region is:
+Map the player position to a region before restoring it: floor-divide block
+coordinates by 16 to obtain chunk coordinates, then floor-divide those by 32
+to obtain region coordinates. Do not retain a prior incident's affected region
+as the current target without rescanning production.
 
-- `world/dimensions/minecraft/overworld/region/r.-12.-3.mca`
-
-During the 2026-09-05 incident, the clean recovered house region had all 1024
-chunk entries readable after surgical replacement.
+A clean Paper startup does not validate every region. Paper loads regions as
+players or forced chunks require them, so scan or deliberately load the
+suspected area before declaring the world healthy.
 
 ## Surgical region replacement
 
 If only one region needs replacement, keep the server stopped and replace just
 that file from a verified source.
 
-1. Mount the production PVC read/write in a temporary pod.
-2. Copy the current file aside with a timestamped suffix.
-3. Upload the verified replacement file.
-4. Verify SHA256 after upload.
-5. Install the replacement with ownership `1000:3000` and mode `0664`.
-6. Delete the helper pod and restart Minecraft.
+1. Create a timestamped full-PVC preservation copy when the current production
+   state has not already been preserved. Mount production read-only in the copy
+   pod and verify file count, byte count, and per-file SHA256 manifests.
+2. Mount the production PVC read/write in a temporary pod.
+3. Copy the current file aside with a timestamped suffix.
+4. Upload the verified replacement file.
+5. Verify SHA256 after upload.
+6. Install the replacement with ownership `1000:3000` and mode `0664`.
+7. Delete the helper pod and restart Minecraft.
 
 Example target path:
 

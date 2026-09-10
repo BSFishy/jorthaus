@@ -294,6 +294,7 @@ in
           "-mdir=${cfg.master.dir}"
           "-peers=${cfg.master.peers}"
           "-volumeSizeLimitMB=${toString cfg.master.volumeSizeLimitMB}"
+          "-garbageThreshold=${toString cfg.master.garbageThreshold}"
           "-resumeState=true"
           "-metricsIp=${host.ipam.ipv4.address}"
         ];

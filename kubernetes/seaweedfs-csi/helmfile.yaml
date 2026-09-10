@@ -11,5 +11,6 @@ releases:
   - name: seaweedfs-csi-driver
     namespace: kube-system
     chart: seaweedfs-csi-driver/seaweedfs-csi-driver
+    version: 0.2.37
     values:
       - values/csi.yaml

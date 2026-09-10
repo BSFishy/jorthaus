@@ -194,6 +194,12 @@ in
         default = 1024;
         description = "SeaweedFS master volume size limit in MiB.";
       };
+
+      garbageThreshold = lib.mkOption {
+        type = lib.types.float;
+        default = 1.1;
+        description = "Garbage ratio required before automatic vacuum; above 1 disables automatic vacuum.";
+      };
     };
 
     filer = {

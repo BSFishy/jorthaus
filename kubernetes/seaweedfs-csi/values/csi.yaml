@@ -8,8 +8,14 @@ security:
   enabled: true
   existingSecret: seaweedfs-csi-config
 
+seaweedfsCsiPlugin:
+  image: chrislusf/seaweedfs-csi-driver
+  tag: v1.4.31
+
 mountService:
   enabled: true
+  image: chrislusf/seaweedfs-mount
+  tag: v1.4.31
 
 node:
   enabled: true
