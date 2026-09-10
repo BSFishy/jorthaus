@@ -4,6 +4,24 @@ set default-list := true
 import 'kubernetes/justfile'
 import 'terraform/justfile'
 
+# initialize the Terraform providers used for application configuration
+[group('terraform')]
+[working-directory: 'terraform/apps']
+init-apps:
+  tofu init
+
+# plan application configuration with the Authentik token read directly from OpenBao
+[group('terraform')]
+[working-directory: 'terraform/apps']
+plan-apps:
+  AUTHENTIK_URL=https://auth.jort.haus AUTHENTIK_TOKEN="$(vault kv get -mount=authentik -field=token terraform)" tofu plan
+
+# apply application configuration with the Authentik token read directly from OpenBao
+[group('terraform')]
+[working-directory: 'terraform/apps']
+apply-apps:
+  AUTHENTIK_URL=https://auth.jort.haus AUTHENTIK_TOKEN="$(vault kv get -mount=authentik -field=token terraform)" tofu apply
+
 # verify nix diagnostics pass
 [group('nix')]
 nix-check:

@@ -42,23 +42,11 @@ resource "random_password" "authentik_secret_key" {
   special = true
 }
 
-resource "random_password" "authentik_bootstrap_password" {
-  length  = 32
-  special = true
-}
-
-resource "random_password" "authentik_bootstrap_token" {
-  length  = 64
-  special = false
-}
-
 resource "vault_kv_secret_v2" "authentik_config" {
   mount = vault_mount.authentik.path
   name  = "config"
 
   data_json = jsonencode({
-    bootstrap_password   = random_password.authentik_bootstrap_password.result
-    bootstrap_token      = random_password.authentik_bootstrap_token.result
     postgres_host        = "postgres.service.jort.haus"
     postgres_name        = "authentik"
     postgres_port        = "5432"

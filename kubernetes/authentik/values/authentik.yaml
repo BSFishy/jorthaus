@@ -15,10 +15,6 @@ global:
   env:
     - name: AUTHENTIK_SECRET_KEY
       value: file:///run/secrets/jorthaus/static/secret_key
-    - name: AUTHENTIK_BOOTSTRAP_PASSWORD
-      value: file:///run/secrets/jorthaus/static/bootstrap_password
-    - name: AUTHENTIK_BOOTSTRAP_TOKEN
-      value: file:///run/secrets/jorthaus/static/bootstrap_token
     - name: AUTHENTIK_POSTGRESQL__USER
       value: file:///run/secrets/jorthaus/static/postgres_username
     - name: AUTHENTIK_POSTGRESQL__PASSWORD
