@@ -20,15 +20,26 @@ objects managed in `terraform/apps` (applications, proxy providers, flows,
 stages, bindings, the embedded outpost, and the disabled bootstrap-account
 resource). It has no token or RBAC-administration permissions.
 
+`terraform/authentik-admin` declaratively manages that role, its permissions,
+and the service account's role assignment. It runs only with a human-admin API
+token supplied through `AUTHENTIK_ADMIN_TOKEN`; the token is never stored in
+Terraform or OpenBao. Initialize and import the existing objects once, then
+use this root whenever a new application type needs permissions:
+
+```zsh
+read -r -s "AUTHENTIK_ADMIN_TOKEN?Human-admin Authentik API token: "
+echo
+export AUTHENTIK_ADMIN_TOKEN
+just import-authentik-admin
+just plan-authentik-admin
+just apply-authentik-admin
+unset AUTHENTIK_ADMIN_TOKEN
+```
+
 `jorthaus-admins` remains a manually administered superuser group. Terraform
 reads it as a data source for application access bindings; it does not manage
 its membership or superuser status. This keeps the application-configuration
 token outside the administrative access path.
-
-When a new application type requires additional Authentik permissions, update
-the `jorthaus-terraform-apps` role through an authenticated human administrator,
-then verify the existing token with `just plan-apps` before applying its new
-Terraform configuration.
 
 ### Rotate the Terraform API token
 

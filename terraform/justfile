@@ -1,3 +1,45 @@
+# initialize the Authentik administrative Terraform root
+[group('terraform')]
+[working-directory: 'terraform/authentik-admin']
+init-authentik-admin:
+  tofu init
+
+# plan Authentik RBAC administration using a human-admin API token supplied at runtime
+[group('terraform')]
+[working-directory: 'terraform/authentik-admin']
+plan-authentik-admin:
+  test -n "${AUTHENTIK_ADMIN_TOKEN:-}" || { echo 'Set AUTHENTIK_ADMIN_TOKEN to a human-admin API token.' >&2; exit 1; }
+  AUTHENTIK_URL=https://auth.jort.haus AUTHENTIK_TOKEN="$AUTHENTIK_ADMIN_TOKEN" tofu plan
+
+# apply Authentik RBAC administration using a human-admin API token supplied at runtime
+[group('terraform')]
+[working-directory: 'terraform/authentik-admin']
+apply-authentik-admin:
+  test -n "${AUTHENTIK_ADMIN_TOKEN:-}" || { echo 'Set AUTHENTIK_ADMIN_TOKEN to a human-admin API token.' >&2; exit 1; }
+  AUTHENTIK_URL=https://auth.jort.haus AUTHENTIK_TOKEN="$AUTHENTIK_ADMIN_TOKEN" tofu apply
+
+# import the existing Terraform service account, role, and current role permissions
+[script]
+[group('terraform')]
+[working-directory: 'terraform/authentik-admin']
+import-authentik-admin:
+  set -euo pipefail
+  : "${AUTHENTIK_ADMIN_TOKEN:?Set AUTHENTIK_ADMIN_TOKEN to a human-admin API token.}"
+  export AUTHENTIK_URL=https://auth.jort.haus
+  export AUTHENTIK_TOKEN="$AUTHENTIK_ADMIN_TOKEN"
+  tofu init
+  tofu import authentik_rbac_role.terraform_apps 58109253-db31-4f92-9d70-3a5843857341
+  tofu import authentik_user.terraform 36
+  permissions=$(mktemp)
+  trap 'rm -f "$permissions"' EXIT
+  curl --silent --show-error --fail --header "Authorization: Bearer $AUTHENTIK_TOKEN" \
+    'https://auth.jort.haus/api/v3/rbac/permissions/roles/?uuid=58109253-db31-4f92-9d70-3a5843857341&page_size=100' \
+    >"$permissions"
+  jq -r '.results[] | select(.object_pk == null) | [.app_label, .codename, .id] | @tsv' "$permissions" \
+    | while IFS=$'\t' read -r app_label codename id; do
+        tofu import "authentik_rbac_permission_role.terraform_apps[\"$app_label.$codename\"]" "$id"
+      done
+
 # plan terraform changes for infra
 [group('terraform')]
 [working-directory: 'terraform/infra']
