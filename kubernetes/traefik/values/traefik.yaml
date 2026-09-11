@@ -11,6 +11,9 @@ providers:
 global:
   sendAnonymousUsage: false
 
+api:
+  dashboard: true
+
 ports:
   web:
     http:
