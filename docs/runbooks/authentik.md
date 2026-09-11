@@ -12,6 +12,48 @@ application role its database privileges.
 OpenBao manages the application password through
 `postgres/static-creds/authentik-static`. The password rotates every 180 days.
 
+## Terraform application-configuration access
+
+The `terraform` Authentik service account holds the
+`jorthaus-terraform-apps` role. The role permits application-configuration
+objects managed in `terraform/apps` (applications, proxy providers, flows,
+stages, bindings, the embedded outpost, and the disabled bootstrap-account
+resource). It has no token or RBAC-administration permissions.
+
+`jorthaus-admins` remains a manually administered superuser group. Terraform
+reads it as a data source for application access bindings; it does not manage
+its membership or superuser status. This keeps the application-configuration
+token outside the administrative access path.
+
+When a new application type requires additional Authentik permissions, update
+the `jorthaus-terraform-apps` role through an authenticated human administrator,
+then verify the existing token with `just plan-apps` before applying its new
+Terraform configuration.
+
+### Rotate the Terraform API token
+
+The `terraform` API token is stored only at OpenBao path
+`authentik/terraform`, key `token`. Authentik API-token expiration is set from
+the tenant's **Default token duration** when the token is created; set that
+value before creating a replacement token.
+
+1. Create a replacement API token for the `terraform` service account in
+   Authentik. Do not use its app password.
+2. Write the replacement token without placing it in shell history:
+
+   ```zsh
+   read -r -s "NEW_AUTHENTIK_TOKEN?New Authentik API token: "
+   echo
+   printf '%s' "$NEW_AUTHENTIK_TOKEN" | vault kv put -mount=authentik terraform token=-
+   unset NEW_AUTHENTIK_TOKEN
+   ```
+
+3. Confirm the replacement works, then revoke the previous API token:
+
+   ```bash
+   just plan-apps
+   ```
+
 ## Scheduled password rotation
 
 PostgreSQL accepts one password per role. A static-role rotation invalidates

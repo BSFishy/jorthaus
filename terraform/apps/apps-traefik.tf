@@ -14,6 +14,6 @@ resource "authentik_application" "traefik_dashboard" {
 
 resource "authentik_policy_binding" "traefik_dashboard_admins" {
   target = authentik_application.traefik_dashboard.uuid
-  group  = authentik_group.jorthaus_admins.id
+  group  = data.authentik_group.jorthaus_admins.id
   order  = 0
 }
