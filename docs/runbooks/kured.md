@@ -76,9 +76,10 @@ kubectl -n kube-system get ds kured \
   -o jsonpath='{.metadata.annotations.weave\.works/kured-node-lock}{"\n"}'
 ```
 
-With `lockReleaseDelay: 24h`, kured holds the lock for a day after a reboot
-operation before another node can proceed. A stale-looking lock can be normal
-inside that delay window.
+`lockReleaseDelay: 24h` spaces reboot operations by a day. `lockTtl: 24h`
+expires a lock that was not released, so a replaced or failed kured pod cannot
+block later maintenance windows indefinitely. A stale-looking lock can be
+normal inside that delay window.
 
 ## Correlate host sentinels and boot times
 

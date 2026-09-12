@@ -6,5 +6,6 @@ configuration:
   timeZone: America/Chicago
   period: 1h
   lockReleaseDelay: 24h
+  lockTtl: 24h
   concurrency: 1
   annotateNodes: true
