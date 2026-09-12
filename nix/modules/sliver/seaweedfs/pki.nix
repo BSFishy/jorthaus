@@ -70,70 +70,70 @@ let
     key = "${cfg.tls.keyFile}"
   '';
   issueInternalCert = pkgs.writeShellScript "jorthaus-seaweedfs-issue-internal-cert" ''
-    set -euo pipefail
+        set -euo pipefail
 
-    if [ -s ${cfg.tls.certFile} ] && [ -s ${cfg.tls.keyFile} ] && [ -s ${cfg.tls.caFile} ] \
-      && ${lib.getExe pkgs.openssl} x509 -checkend $((7 * 24 * 60 * 60)) -noout -in ${cfg.tls.certFile}
-    then
-      exit 0
-    fi
+        if [ -s ${cfg.tls.certFile} ] && [ -s ${cfg.tls.keyFile} ] && [ -s ${cfg.tls.caFile} ] \
+          && ${lib.getExe pkgs.openssl} x509 -checkend $((7 * 24 * 60 * 60)) -noout -in ${cfg.tls.certFile}
+        then
+          exit 0
+        fi
 
-    for _ in $(seq 1 60); do
-      if [ -s ${tokenFile} ]; then
-        break
-      fi
-      sleep 1
-    done
+        for _ in $(seq 1 60); do
+          if [ -s ${tokenFile} ]; then
+            break
+          fi
+          sleep 1
+        done
 
-    [ -s ${tokenFile} ]
+        [ -s ${tokenFile} ]
 
-    export BAO_ADDR=https://openbao.service.jort.haus:8200
-    export BAO_TOKEN="$(tr -d '\n' < ${tokenFile})"
+        export BAO_ADDR=https://openbao.service.jort.haus:8200
+        export BAO_TOKEN="$(tr -d '\n' < ${tokenFile})"
 
-    issue_args=(
-      ${lib.getExe pkgs.openbao}
-      write
-      -format=json
-      seaweedfs-pki/issue/seaweedfs-node
-      common_name=${cfg.tls.commonName}
-      ttl=720h
-    )
+        issue_args=(
+          ${lib.getExe pkgs.openbao}
+          write
+          -format=json
+          seaweedfs-pki/issue/seaweedfs-node
+          common_name=${cfg.tls.commonName}
+          ttl=720h
+        )
 
-    if [ -n '${altNames}' ]; then
-      issue_args+=("alt_names=${altNames}")
-    fi
+        if [ -n '${altNames}' ]; then
+          issue_args+=("alt_names=${altNames}")
+        fi
 
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
+        tmpdir="$(mktemp -d)"
+        trap 'rm -rf "$tmpdir"' EXIT
 
-    "''${issue_args[@]}" > "$tmpdir/issue.json"
+        "''${issue_args[@]}" > "$tmpdir/issue.json"
 
-    ${lib.getExe pkgs.python3} - "$tmpdir/issue.json" ${cfg.tls.certFile} ${cfg.tls.keyFile} ${cfg.tls.caFile} <<'PY'
-import json
-import os
-import sys
+        ${lib.getExe pkgs.python3} - "$tmpdir/issue.json" ${cfg.tls.certFile} ${cfg.tls.keyFile} ${cfg.tls.caFile} <<'PY'
+    import json
+    import os
+    import sys
 
-issue_path, cert_path, key_path, ca_path = sys.argv[1:5]
-with open(issue_path, "r", encoding="utf-8") as f:
-    data = json.load(f)["data"]
+    issue_path, cert_path, key_path, ca_path = sys.argv[1:5]
+    with open(issue_path, "r", encoding="utf-8") as f:
+        data = json.load(f)["data"]
 
-ca_chain = data.get("ca_chain") or []
-ca_pem = "\n".join(ca_chain).strip()
-if not ca_pem:
-    ca_pem = (data.get("issuing_ca") or "").strip()
+    ca_chain = data.get("ca_chain") or []
+    ca_pem = "\n".join(ca_chain).strip()
+    if not ca_pem:
+        ca_pem = (data.get("issuing_ca") or "").strip()
 
-for path, value in (
-    (cert_path, (data["certificate"] + "\n").strip() + "\n"),
-    (key_path, (data["private_key"] + "\n").strip() + "\n"),
-    (ca_path, ca_pem + ("\n" if ca_pem else "")),
-):
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(value)
-PY
+    for path, value in (
+        (cert_path, (data["certificate"] + "\n").strip() + "\n"),
+        (key_path, (data["private_key"] + "\n").strip() + "\n"),
+        (ca_path, ca_pem + ("\n" if ca_pem else "")),
+    ):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(value)
+    PY
 
-    chown root:seaweedfs ${cfg.tls.certFile} ${cfg.tls.keyFile} ${cfg.tls.caFile}
-    chmod 0640 ${cfg.tls.certFile} ${cfg.tls.caFile}
-    chmod 0640 ${cfg.tls.keyFile}
+        chown root:seaweedfs ${cfg.tls.certFile} ${cfg.tls.keyFile} ${cfg.tls.caFile}
+        chmod 0640 ${cfg.tls.certFile} ${cfg.tls.caFile}
+        chmod 0640 ${cfg.tls.keyFile}
   '';
 in
 {
@@ -222,11 +222,13 @@ in
       after = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       wants = [
         "network-online.target"
         "agenix.service"
-      ] ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+      ]
+      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
       serviceConfig = {
         RuntimeDirectory = lib.mkForce "seaweedfs-agent-pki";
         RuntimeDirectoryMode = lib.mkForce "0750";

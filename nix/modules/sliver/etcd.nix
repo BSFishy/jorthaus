@@ -78,7 +78,10 @@ in
       after = [ "var-lib-acme.mount" ];
       wants = [ "var-lib-acme.mount" ];
       unitConfig = {
-        RequiresMountsFor = [ "/srv/etcd" "/var/lib/acme" ];
+        RequiresMountsFor = [
+          "/srv/etcd"
+          "/var/lib/acme"
+        ];
         ConditionPathExists = "${certDir}/fullchain.pem";
       };
       serviceConfig = {

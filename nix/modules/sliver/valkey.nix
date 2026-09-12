@@ -230,8 +230,14 @@ in
         port = valkeyPort;
         options = "check inter 2s fall 2 rise 1";
       }) valkeyHosts;
-      after = [ "redis-valkey.service" "redis-valkey-sentinel.service" ];
-      wants = [ "redis-valkey.service" "redis-valkey-sentinel.service" ];
+      after = [
+        "redis-valkey.service"
+        "redis-valkey-sentinel.service"
+      ];
+      wants = [
+        "redis-valkey.service"
+        "redis-valkey-sentinel.service"
+      ];
     };
   };
 }

@@ -77,7 +77,10 @@ in
       after = [ "var-lib-acme.mount" ];
       wants = [ "var-lib-acme.mount" ];
       unitConfig = {
-        RequiresMountsFor = [ "/srv/openbao" "/var/lib/acme" ];
+        RequiresMountsFor = [
+          "/srv/openbao"
+          "/var/lib/acme"
+        ];
         ConditionPathExists = "${certDir}/fullchain.pem";
       };
       serviceConfig = {

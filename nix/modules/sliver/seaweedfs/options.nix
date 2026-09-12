@@ -184,7 +184,9 @@ in
         type = lib.types.str;
         readOnly = true;
         default = lib.concatStringsSep "," (
-          map (peer: "${peer.hostname}.node.jort.haus:${toString config.jorthaus.seaweedfs.master.port}") controlplaneHosts
+          map (
+            peer: "${peer.hostname}.node.jort.haus:${toString config.jorthaus.seaweedfs.master.port}"
+          ) controlplaneHosts
         );
         description = "Comma-separated SeaweedFS controlplane peer list.";
       };
@@ -219,7 +221,9 @@ in
         type = lib.types.str;
         readOnly = true;
         default = lib.concatStringsSep "," (
-          map (peer: "${peer.hostname}.node.jort.haus:${toString config.jorthaus.seaweedfs.master.port}") controlplaneHosts
+          map (
+            peer: "${peer.hostname}.node.jort.haus:${toString config.jorthaus.seaweedfs.master.port}"
+          ) controlplaneHosts
         );
         description = "Comma-separated SeaweedFS controlplane master list for filers.";
       };
@@ -324,7 +328,9 @@ in
         type = lib.types.str;
         readOnly = true;
         default = lib.concatStringsSep "," (
-          map (peer: "${peer.hostname}.node.jort.haus:${toString config.jorthaus.seaweedfs.master.port}") controlplaneHosts
+          map (
+            peer: "${peer.hostname}.node.jort.haus:${toString config.jorthaus.seaweedfs.master.port}"
+          ) controlplaneHosts
         );
         description = "Comma-separated SeaweedFS controlplane master list for volume servers.";
       };
@@ -378,4 +384,3 @@ in
     ];
   };
 }
-
