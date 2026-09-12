@@ -24,6 +24,22 @@ in
       };
       bondConfig.Mode = "active-backup";
     };
+
+    "20-bond0-personal" = {
+      netdevConfig = {
+        Kind = "vlan";
+        Name = "bond0.3";
+      };
+      vlanConfig.Id = 3;
+    };
+
+    "20-bond0-iot" = {
+      netdevConfig = {
+        Kind = "vlan";
+        Name = "bond0.5";
+      };
+      vlanConfig.Id = 5;
+    };
   };
 
   systemd.network.networks = {
@@ -43,6 +59,10 @@ in
       networkConfig = {
         DHCP = "no";
         DNSDefaultRoute = false;
+        VLAN = [
+          "bond0.3"
+          "bond0.5"
+        ];
       };
 
       # TODO: Enable dual-stack service networking.
@@ -56,6 +76,18 @@ in
         UseDNS = false;
         UseDomains = false;
       };
+    };
+
+    "20-ssdp-personal" = {
+      matchConfig.Name = "bond0.3";
+      linkConfig.RequiredForOnline = false;
+      networkConfig.LinkLocalAddressing = "no";
+    };
+
+    "20-ssdp-iot" = {
+      matchConfig.Name = "bond0.5";
+      linkConfig.RequiredForOnline = false;
+      networkConfig.LinkLocalAddressing = "no";
     };
   };
 }

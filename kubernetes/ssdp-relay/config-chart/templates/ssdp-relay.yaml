@@ -1,0 +1,84 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: ssdp-personal
+  namespace: ssdp-relay
+spec:
+  config: |-
+    {"cniVersion":"1.0.0","name":"ssdp-personal","type":"macvlan","master":"bond0.3","mode":"bridge","ipam":{"type":"whereabouts","range":"10.0.2.0/24","range_start":"10.0.2.2","range_end":"10.0.2.5"}}
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: ssdp-iot
+  namespace: ssdp-relay
+spec:
+  config: |-
+    {"cniVersion":"1.0.0","name":"ssdp-iot","type":"macvlan","master":"bond0.5","mode":"bridge","ipam":{"type":"whereabouts","range":"10.0.4.0/24","range_start":"10.0.4.2","range_end":"10.0.4.5"}}
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: ssdp-homelab
+  namespace: ssdp-relay
+spec:
+  config: |-
+    {"cniVersion":"1.0.0","name":"ssdp-homelab","type":"macvlan","master":"bond0","mode":"bridge","ipam":{"type":"whereabouts","range":"10.1.0.0/16","range_start":"10.1.13.240","range_end":"10.1.13.254"}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssdp-relay
+  namespace: ssdp-relay
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ssdp-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ssdp-relay
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |-
+          [{"name":"ssdp-personal","interface":"personal"},{"name":"ssdp-iot","interface":"iot"},{"name":"ssdp-homelab","interface":"homelab"}]
+    spec:
+      nodeSelector:
+        jort.haus/ssdp-relay: "true"
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: relay
+          image: jorthaus-ssdp-relay:5a5cd384bc944f40ebda3658b08ce0c1c9f00182
+          imagePullPolicy: Never
+          args:
+            - --id
+            - "1"
+            - --port
+            - "1900"
+            - --dev
+            - personal
+            - --dev
+            - iot
+            - --dev
+            - homelab
+            - --multicast
+            - 239.255.255.250
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE", "NET_RAW"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi

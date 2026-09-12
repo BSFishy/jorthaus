@@ -3,6 +3,7 @@ helmfiles:
   - path: openbao-csi/helmfile.yaml
   - path: multus/helmfile.yaml
   - path: whereabouts/helmfile.yaml
+  - path: ssdp-relay/helmfile.yaml
   - path: seaweedfs-csi/helmfile.yaml
   - path: kured/helmfile.yaml
   - path: traefik/helmfile.yaml

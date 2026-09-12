@@ -45,6 +45,7 @@ let
   tokenFile = "/run/k3s/token";
   datastoreEnvFile = "/run/k3s/datastore.env";
   agentDir = "/run/k3s-agent";
+  ssdpRelayImage = import ../../packages/ssdp-relay.nix { inherit pkgs; };
   disableDefaults = [
     "traefik"
     "servicelb"
@@ -398,8 +399,27 @@ in
         "--write-kubeconfig-mode=0640"
         "--disable-network-policy"
         "--flannel-backend=none"
+        "--node-label=jort.haus/ssdp-relay=true"
       ]
       ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
+    };
+
+    systemd.services.jorthaus-k3s-ssdp-relay-image = lib.mkIf enabled {
+      description = "Import the declarative SSDP relay image into k3s containerd";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "k3s.service" ];
+      requires = [ "k3s.service" ];
+      restartTriggers = [ ssdpRelayImage ];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        for _ in $(seq 1 30); do
+          if ${pkgs.k3s}/bin/k3s ctr --namespace k8s.io images import ${ssdpRelayImage}; then
+            exit 0
+          fi
+          sleep 1
+        done
+        exit 1
+      '';
     };
 
     # TODO: Move k3s datastore bootstrap into the long-term activation-time

@@ -77,6 +77,7 @@
             cluster-info = import ./nix/packages/cluster-info.nix {
               inherit pkgs system hostNames;
             };
+            ssdp-relay-image = import ./nix/packages/ssdp-relay.nix { inherit pkgs; };
           };
 
           devShells.default = pkgs.mkShell {

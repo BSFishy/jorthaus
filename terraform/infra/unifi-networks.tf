@@ -1,6 +1,6 @@
 locals {
   discovery_networks = {
-    homelab = data.unifi_network.homelab
+    homelab  = data.unifi_network.homelab
     personal = data.unifi_network.personal
     iot      = data.unifi_network.iot
   }
@@ -46,6 +46,7 @@ resource "unifi_network" "discovery" {
       ip_aliases,
       ipv6_aliases,
       ipv6_interface_type,
+      ipv6_pd_interface,
       lte_lan,
       nat_outbound_ip_addresses,
       network_isolation,
@@ -60,11 +61,11 @@ output "unifi_discovery_networks" {
   description = "mDNS and IGMP snooping settings managed for discovery VLANs."
   value = {
     for name, network in unifi_network.discovery : name => {
-      id             = network.id
-      multicast_dns  = network.multicast_dns
-      igmp_snooping  = network.igmp_snooping
-      subnet         = network.subnet
-      vlan           = network.vlan
+      id            = network.id
+      multicast_dns = network.multicast_dns
+      igmp_snooping = network.igmp_snooping
+      subnet        = network.subnet
+      vlan          = network.vlan
     }
   }
 }

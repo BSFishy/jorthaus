@@ -20,7 +20,7 @@ spec:
         "type": "whereabouts",
         "range": "10.1.0.0/16",
         "range_start": "10.1.13.2",
-        "range_end": "10.1.13.254",
+        "range_end": "10.1.13.239",
         "gateway": "10.1.0.1"
       }
     }
