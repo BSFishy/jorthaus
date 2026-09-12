@@ -65,6 +65,21 @@ value before creating a replacement token.
    just plan-apps
    ```
 
+## Friend invitations
+
+Friends enroll through the invitation-only `jorthaus-friend-enrollment` flow.
+New accounts are active internal users in `users/friends` and members of the
+non-administrative `jorthaus-friends` group. The issuer creates a single-use
+link that expires after 48 hours:
+
+```bash
+just invite-friend 'Friend name' friend@example.com
+```
+
+The email argument is optional. Treat the printed URL as a bearer credential
+and share it only with its intended recipient. `auth.jort.haus` is
+internal-only, so invitees need LAN or VPN access.
+
 ## Scheduled password rotation
 
 PostgreSQL accepts one password per role. A static-role rotation invalidates

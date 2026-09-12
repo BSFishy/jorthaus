@@ -40,6 +40,40 @@ import-authentik-admin:
         tofu import "authentik_rbac_permission_role.terraform_apps[\"$app_label.$codename\"]" "$id"
       done
 
+# create the invitation-issuer API token and store it directly in OpenBao
+[script]
+[group('terraform')]
+[working-directory: 'terraform/authentik-admin']
+setup-invitation-issuer:
+  set -euo pipefail
+  : "${AUTHENTIK_ADMIN_TOKEN:?Set AUTHENTIK_ADMIN_TOKEN to a human-admin API token.}"
+  user_id=$(tofu show -json | jq -er '.values.root_module.resources[] | select(.address == "authentik_user.invitation_issuer") | .values.id')
+  token=$(curl --silent --show-error --fail --request POST \
+    --header "Authorization: Bearer $AUTHENTIK_ADMIN_TOKEN" --header 'Content-Type: application/json' \
+    --data "$(jq -nc --argjson user "$user_id" '{identifier: "jorthaus-invitation-issuer", intent: "api", user: $user, expiring: true}')" \
+    'https://auth.jort.haus/api/v3/core/tokens/' >/dev/null; \
+    curl --silent --show-error --fail --header "Authorization: Bearer $AUTHENTIK_ADMIN_TOKEN" \
+      'https://auth.jort.haus/api/v3/core/tokens/jorthaus-invitation-issuer/view_key/' | jq -er '.key')
+  printf '%s' "$token" | vault kv put -mount=authentik invitation-issuer token=-
+  unset token
+
+# create a single-use friend invitation that expires in 48 hours
+[script]
+[group('authentik')]
+invite-friend name email='':
+  set -euo pipefail
+  token="$(vault kv get -mount=authentik -field=token invitation-issuer)"
+  trap 'unset token' EXIT
+  flow_uuid=$(tofu -chdir=terraform/apps state show authentik_flow.friend_enrollment | awk -F' = ' '$1 ~ /^[[:space:]]*uuid$/ {gsub(/"/, "", $2); print $2}')
+  expires=$(date -u -d '+48 hours' '+%Y-%m-%dT%H:%M:%SZ')
+  invitation_name="friend-$(printf '%s' '{{name}}' | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-')-$(date -u '+%Y%m%d%H%M%S')"
+  fixed_data=$(jq -nc --arg name '{{name}}' --arg email '{{email}}' 'if $email == "" then {name: $name} else {name: $name, email: $email} end')
+  invitation_id=$(curl --silent --show-error --fail --request POST \
+    --header "Authorization: Bearer $token" --header 'Content-Type: application/json' \
+    --data "$(jq -nc --arg name "$invitation_name" --arg expires "$expires" --arg flow "$flow_uuid" --argjson fixed_data "$fixed_data" '{name: $name, expires: $expires, flow: $flow, fixed_data: $fixed_data, single_use: true}')" \
+    'https://auth.jort.haus/api/v3/stages/invitation/invitations/' | jq -er '.pk')
+  printf 'https://auth.jort.haus/if/flow/jorthaus-friend-enrollment/?itoken=%s\n' "$invitation_id"
+
 # plan terraform changes for infra
 [group('terraform')]
 [working-directory: 'terraform/infra']
