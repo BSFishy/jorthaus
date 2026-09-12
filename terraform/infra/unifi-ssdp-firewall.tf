@@ -34,6 +34,31 @@ locals {
   }
 }
 
+resource "unifi_firewall_policy" "home_assistant_traefik" {
+  name                 = "Allow Home Assistant to Traefik"
+  description          = "Allows the Homelab Multus automation subnet to reach the Traefik HTTPS address."
+  site                 = var.site
+  action               = "ALLOW"
+  protocol             = "tcp"
+  ip_version           = "IPV4"
+  create_allow_respond = true
+
+  source = {
+    zone_id            = data.unifi_firewall_zone.dmz.id
+    matching_target    = "IP"
+    ips                = ["10.1.13.0/24"]
+    port_matching_type = "ANY"
+  }
+
+  destination = {
+    zone_id            = data.unifi_firewall_zone.dmz.id
+    matching_target    = "IP"
+    ips                = ["10.1.12.20/32"]
+    port_matching_type = "SPECIFIC"
+    port               = "443"
+  }
+}
+
 resource "unifi_firewall_policy" "home_assistant_device_access" {
   for_each = {
     personal = local.ssdp_networks.personal

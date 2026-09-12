@@ -18,6 +18,20 @@ apply-authentik-admin:
   test -n "${AUTHENTIK_ADMIN_TOKEN:-}" || { echo 'Set AUTHENTIK_ADMIN_TOKEN to a human-admin API token.' >&2; exit 1; }
   AUTHENTIK_URL=https://auth.jort.haus AUTHENTIK_TOKEN="$AUTHENTIK_ADMIN_TOKEN" tofu apply
 
+# run apply-authentik-admin reading the admin token from stdin
+[script]
+[group('terraform')]
+[working-directory: 'terraform/authentik-admin']
+apply-authentik-admin-token:
+  printf '%s' 'Authentik admin token: '
+  stty -echo
+  trap 'stty echo; unset AUTHENTIK_ADMIN_TOKEN' EXIT HUP INT TERM
+  IFS= read -r AUTHENTIK_ADMIN_TOKEN
+  stty echo
+  printf '\n'
+  export AUTHENTIK_ADMIN_TOKEN
+  AUTHENTIK_URL=https://auth.jort.haus AUTHENTIK_TOKEN="$AUTHENTIK_ADMIN_TOKEN" tofu apply
+
 # import the existing Terraform service account, role, and current role permissions
 [script]
 [group('terraform')]
