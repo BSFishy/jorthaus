@@ -231,6 +231,10 @@ in
     };
 
     systemd.tmpfiles.rules = [
+      # Secondary CNI attachments use the host CNI binary directory that k3s
+      # exposes to the runtime.
+      "r /opt/cni/bin/macvlan - - - -"
+      "C /opt/cni/bin/macvlan - - - - ${pkgs.cni-plugins}/bin/macvlan"
       "d ${agentDir} 0750 k3s k3s -"
       "d /run/k3s 0750 k3s k3s -"
     ];

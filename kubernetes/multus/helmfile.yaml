@@ -1,0 +1,4 @@
+releases:
+  - name: multus
+    namespace: kube-system
+    chart: ./config-chart

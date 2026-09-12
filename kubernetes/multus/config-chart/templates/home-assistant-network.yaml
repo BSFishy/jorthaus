@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: home-assistant
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: homelab-lan
+  namespace: home-assistant
+spec:
+  config: |-
+    {
+      "cniVersion": "1.0.0",
+      "name": "homelab-lan",
+      "type": "macvlan",
+      "master": "bond0",
+      "mode": "bridge",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "10.1.0.0/16",
+        "range_start": "10.1.13.2",
+        "range_end": "10.1.13.254",
+        "gateway": "10.1.0.1"
+      }
+    }

@@ -1,0 +1,6 @@
+releases:
+  - name: whereabouts
+    namespace: kube-system
+    chart: .
+    values:
+      - values.yaml
