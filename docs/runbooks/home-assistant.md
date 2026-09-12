@@ -40,3 +40,26 @@ kubectl -n home-assistant get pod -l app.kubernetes.io/name=home-assistant
 ```
 
 Confirm the Home Assistant UI opens and local recovery authentication works.
+
+## Move the Zigbee coordinator
+
+The generic device plugin advertises the Sonoff Zigbee coordinator as the
+extended resource `jort.haus/zigbee-coordinator` on the node where its stable
+`/dev/serial/by-id` path exists. Home Assistant requests that resource, so the
+scheduler places it on the node currently hosting the coordinator. The device
+is available to Home Assistant as `/dev/ttyUSB0`.
+
+After moving the coordinator, wait for the destination node to report one
+allocatable device, then recreate Home Assistant so the scheduler can place it
+on that node:
+
+```bash
+kubectl get node <destination-node> \
+  -o jsonpath='{.status.allocatable.jort\.haus/zigbee-coordinator}{"\n"}'
+kubectl -n home-assistant delete pod -l app.kubernetes.io/name=home-assistant
+kubectl -n home-assistant rollout status deployment/home-assistant --timeout=300s
+kubectl -n home-assistant get pod -l app.kubernetes.io/name=home-assistant -o wide
+```
+
+Verify that `/dev/ttyUSB0` is a character device in the restarted container and
+confirm the coordinator reconnects in the Home Assistant UI.

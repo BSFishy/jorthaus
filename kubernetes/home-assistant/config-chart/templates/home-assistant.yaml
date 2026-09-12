@@ -111,6 +111,7 @@ spec:
             limits:
               cpu: "2"
               memory: 2Gi
+              jort.haus/zigbee-coordinator: 1
           volumeMounts:
             - name: config
               mountPath: /config

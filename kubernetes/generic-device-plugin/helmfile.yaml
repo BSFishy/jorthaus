@@ -1,0 +1,4 @@
+releases:
+  - name: generic-device-plugin
+    namespace: kube-system
+    chart: ./config-chart
