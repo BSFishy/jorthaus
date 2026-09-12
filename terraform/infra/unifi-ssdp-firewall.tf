@@ -34,11 +34,40 @@ locals {
   }
 }
 
+resource "unifi_firewall_policy" "home_assistant_device_access" {
+  for_each = {
+    personal = local.ssdp_networks.personal
+    iot      = local.ssdp_networks.iot
+  }
+
+  name                 = "Allow Home Assistant to ${each.key} devices"
+  description          = "Allows the Homelab Multus automation subnet to reach ${each.key} devices over TCP."
+  site                 = var.site
+  action               = "ALLOW"
+  protocol             = "tcp"
+  ip_version           = "IPV4"
+  create_allow_respond = true
+
+  source = {
+    zone_id            = data.unifi_firewall_zone.dmz.id
+    matching_target    = "IP"
+    ips                = ["10.1.13.0/24"]
+    port_matching_type = "ANY"
+  }
+
+  destination = {
+    zone_id            = each.value.zone_id
+    matching_target    = "NETWORK"
+    network_ids        = [each.value.network_id]
+    port_matching_type = "ANY"
+  }
+}
+
 resource "unifi_firewall_policy" "ssdp_responses" {
   for_each = local.ssdp_paths
 
   name                 = "Allow SSDP ${each.value.source} to ${each.value.destination}"
-  description          = "Allows UDP/1900 SSDP response traffic from ${each.value.source} to ${each.value.destination}."
+  description          = "Allows UDP source port 1900 SSDP response traffic from ${each.value.source} to ${each.value.destination}."
   site                 = var.site
   action               = "ALLOW"
   protocol             = "udp"
@@ -57,7 +86,6 @@ resource "unifi_firewall_policy" "ssdp_responses" {
     zone_id            = local.ssdp_networks[each.value.destination].zone_id
     matching_target    = "NETWORK"
     network_ids        = [local.ssdp_networks[each.value.destination].network_id]
-    port_matching_type = "OBJECT"
-    port_group_id      = unifi_firewall_group.ssdp_udp.id
+    port_matching_type = "ANY"
   }
 }

@@ -1,0 +1,5 @@
+releases:
+  - name: home-assistant
+    namespace: home-assistant
+    createNamespace: true
+    chart: ./config-chart
