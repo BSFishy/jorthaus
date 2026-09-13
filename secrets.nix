@@ -4,6 +4,8 @@ let
   gaia-01 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJy+bsFZMk1RWtXiEZ95B07dzzOD25rCGt9SghQimLIL";
   gaia-02 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPUMQ1+OgdPrnsuy7MIYuCUJBgrLSnQfygNz80Wbvne+";
   gaia-03 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPxY9m4C39d0v9E2ne4PBNSmffdjePeEyTkENoQJb2kD";
+  gaia-04 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICdirh85WNZ8rtaaRjIr4niOoWa6tnjaU9/Sp6HLVJu7";
+  gaia-05 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIRhs4WcaW1CHbD/e8zyN+GrAM1io/4leLcXm4OUfpjD";
 
   openbao-hosts = [
     matt
@@ -28,18 +30,24 @@ let
     gaia-01
     gaia-02
     gaia-03
+    gaia-04
+    gaia-05
   ];
   k3s-hosts = [
     matt
     gaia-01
     gaia-02
     gaia-03
+    gaia-04
+    gaia-05
   ];
 
   all-nodes = [
     gaia-01
     gaia-02
     gaia-03
+    gaia-04
+    gaia-05
   ];
   all = [ matt ] ++ all-nodes;
 in

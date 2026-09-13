@@ -197,6 +197,25 @@ in
         description = "SeaweedFS master volume size limit in MiB.";
       };
 
+      # A value above one disables the master's automatic vacuum. This retains
+      # deleted chunks until the FUSE/CSI write and recovery paths have been
+      # validated against Minecraft's persistent data.
+      #
+      # Re-evaluate this safeguard only after CSI issue #200 is closed with a
+      # regression test and a tagged CSI release includes the post-v1.4.31
+      # stale-FUSE lazy-detach fixes (f0cba13 and e622b41). SeaweedFS 4.46
+      # already contains the periodic FUSE metadata flush (#7700) and
+      # conditional filer chunk-set update (#10382) protections.
+      #
+      # Before lowering the threshold:
+      # 1. Upgrade both CSI images to that tagged release and verify the
+      #    running driver, mount image, and hostPID configuration.
+      # 2. Produce and restore-test a Minecraft backup, then use a disposable
+      #    production-equivalent PVC to exercise writes, FUSE recovery, and a
+      #    vacuum cycle; verify world integrity by checksum and server startup.
+      # 3. In a maintenance window, quiesce Minecraft, preserve a fresh backup,
+      #    enable vacuum conservatively, and repeat application-level restore
+      #    and integrity validation before treating automatic vacuum as safe.
       garbageThreshold = lib.mkOption {
         type = lib.types.float;
         default = 1.1;

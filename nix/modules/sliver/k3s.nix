@@ -291,6 +291,7 @@ in
               {{- end }}
             '';
           }
+        ] ++ lib.optionals controlplaneEnabled [
           {
             destination = datastoreEnvFile;
             perms = 288;
@@ -351,7 +352,7 @@ in
       }
     ];
 
-    networking.firewall.allowedTCPPorts = lib.mkIf enabled [ cfg.api.port ];
+    networking.firewall.allowedTCPPorts = lib.mkIf controlplaneEnabled [ cfg.api.port ];
     networking.firewall.allowedUDPPorts = lib.mkIf enabled [ ciliumGenevePort ];
     networking.firewall.checkReversePath = lib.mkIf enabled false;
 
@@ -390,24 +391,27 @@ in
         })
     ];
 
-    services.k3s = lib.mkIf enabled {
-      enable = true;
-      role = if controlplaneEnabled then "server" else "agent";
-      inherit serverAddr;
-      tokenFile = cfg.token.file;
-      environmentFile = cfg.datastore.envFile;
-      nodeName = host.hostname;
-      nodeIP = host.ipam.ipv4.address;
-      disable = disableDefaults;
-      gracefulNodeShutdown.enable = true;
-      extraFlags = [
-        "--write-kubeconfig-mode=0640"
-        "--disable-network-policy"
-        "--flannel-backend=none"
-        "--node-label=jort.haus/ssdp-relay=true"
-      ]
-      ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
-    };
+    services.k3s = lib.mkIf enabled (
+      {
+        enable = true;
+        role = if controlplaneEnabled then "server" else "agent";
+        inherit serverAddr;
+        tokenFile = cfg.token.file;
+        nodeName = host.hostname;
+        nodeLabel = [ "jort.haus/ssdp-relay=true" ];
+        nodeIP = host.ipam.ipv4.address;
+        gracefulNodeShutdown.enable = true;
+      }
+      // lib.optionalAttrs controlplaneEnabled {
+        environmentFile = cfg.datastore.envFile;
+        disable = disableDefaults;
+        extraFlags = [
+          "--write-kubeconfig-mode=0640"
+          "--disable-network-policy"
+          "--flannel-backend=none"
+        ] ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
+      }
+    );
 
     systemd.services.jorthaus-k3s-ssdp-relay-image = lib.mkIf enabled {
       description = "Import the declarative SSDP relay image into k3s containerd";
