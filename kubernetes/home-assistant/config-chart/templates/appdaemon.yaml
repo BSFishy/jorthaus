@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: appdaemon-apps
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: seaweedfs-storage
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: appdaemon
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: appdaemon-openbao
+  namespace: {{ .Release.Namespace }}
+spec:
+  provider: vault
+  parameters:
+    roleName: appdaemon
+    vaultAuthMountPath: kubernetes
+    audience: vault
+    vaultAddress: https://openbao.service.jort.haus:8200
+    objects: |
+      - objectName: "ha_token"
+        secretPath: "home-assistant/data/appdaemon"
+        secretKey: "ha_token"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appdaemon
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: appdaemon
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: appdaemon
+    spec:
+      serviceAccountName: appdaemon
+      initContainers:
+        - name: verify-token
+          image: busybox:1.37.0
+          command:
+            - sh
+            - -ec
+            - test -s /mnt/secrets-store/ha_token
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: initialize-apps
+          image: busybox:1.37.0
+          command:
+            - sh
+            - -ec
+            - |
+              mkdir -p /conf/apps
+              test -f /conf/apps/apps.yaml || : > /conf/apps/apps.yaml
+          volumeMounts:
+            - name: apps
+              mountPath: /conf/apps
+      containers:
+        - name: appdaemon
+          image: acockburn/appdaemon:4.5.13
+          command:
+            - sh
+            - -ec
+            - |
+              export HA_URL=http://home-assistant:8123
+              export TOKEN="$(cat /mnt/secrets-store/ha_token)"
+              exec /usr/src/app/dockerStart.sh
+          ports:
+            - name: http
+              containerPort: 5050
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+            - name: apps
+              mountPath: /conf/apps
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: apps
+          persistentVolumeClaim:
+            claimName: appdaemon-apps
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: appdaemon-openbao
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appdaemon
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: appdaemon
+  ports:
+    - name: http
+      port: 5050
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appdaemon-authentik-outpost
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ExternalName
+  externalName: authentik-server.authentik.svc.cluster.local
+  ports:
+    - name: http
+      port: 80
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: appdaemon-auth
+  namespace: {{ .Release.Namespace }}
+spec:
+  forwardAuth:
+    address: http://authentik-server.authentik.svc.cluster.local/outpost.goauthentik.io/auth/traefik
+    maxResponseBodySize: 1048576
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-authentik-username
+      - X-authentik-groups
+      - X-authentik-entitlements
+      - X-authentik-email
+      - X-authentik-name
+      - X-authentik-uid
+      - X-authentik-jwt
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: appdaemon
+  namespace: {{ .Release.Namespace }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`appdaemon.jort.haus`) && PathPrefix(`/outpost.goauthentik.io/`)
+      kind: Rule
+      priority: 20
+      services:
+        - name: appdaemon-authentik-outpost
+          port: 80
+    - match: Host(`appdaemon.jort.haus`)
+      kind: Rule
+      priority: 10
+      middlewares:
+        - name: appdaemon-auth
+      services:
+        - name: appdaemon
+          port: 5050
+  tls: {}

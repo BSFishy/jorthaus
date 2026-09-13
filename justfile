@@ -22,6 +22,19 @@ plan-apps:
 apply-apps:
   AUTHENTIK_URL=https://auth.jort.haus AUTHENTIK_TOKEN="$(vault kv get -mount=authentik -field=token terraform)" tofu apply
 
+# synchronize the version-controlled AppDaemon apps into its persistent volume
+[script]
+[group('kubernetes')]
+appdaemon-deploy:
+  set -euo pipefail
+  test -f appdaemon-apps/apps.yaml
+  pod=$(kubectl -n home-assistant get pod -l app.kubernetes.io/name=appdaemon -o jsonpath='{.items[0].metadata.name}')
+  tar --exclude='apps.yaml' --exclude='__pycache__' --exclude='*.pyc' -C appdaemon-apps -cf - . \
+    | kubectl -n home-assistant exec -i "$pod" -c appdaemon -- tar -C /conf/apps -xf -
+  cat appdaemon-apps/apps.yaml \
+    | kubectl -n home-assistant exec -i "$pod" -c appdaemon -- sh -ec 'cat > /conf/apps/.apps.yaml.next && mv /conf/apps/.apps.yaml.next /conf/apps/apps.yaml'
+  kubectl -n home-assistant logs deployment/appdaemon -c appdaemon --tail=20
+
 # verify nix diagnostics pass
 [group('nix')]
 nix-check:

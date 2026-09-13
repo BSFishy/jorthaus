@@ -63,3 +63,27 @@ kubectl -n home-assistant get pod -l app.kubernetes.io/name=home-assistant -o wi
 
 Verify that `/dev/ttyUSB0` is a character device in the restarted container and
 confirm the coordinator reconnects in the Home Assistant UI.
+
+## AppDaemon
+
+AppDaemon connects to the in-cluster Home Assistant service with a long-lived
+token supplied from OpenBao. Create that token in the Home Assistant user
+profile, then write it without displaying it in the terminal:
+
+```bash
+just appdaemon-token
+```
+
+The AppDaemon admin UI is available at `https://appdaemon.jort.haus` and is
+restricted to `jorthaus-admins` through Authentik. The repository's
+`appdaemon-apps/` directory is the source of truth for `/conf/apps` on the
+`appdaemon-apps` PVC. Add Python apps and `apps.yaml` configuration there, then
+synchronize the complete directory with:
+
+```bash
+just appdaemon-deploy
+```
+
+The sync writes Python source first and atomically replaces `apps.yaml`, so
+AppDaemon only reads complete app configuration. AppDaemon detects the resulting
+changes and reloads the affected apps.

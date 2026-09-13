@@ -8,6 +8,7 @@ data "authentik_flow" "provider_invalidation" {
 
 locals {
   embedded_proxy_provider_ids = [
+    authentik_provider_proxy.appdaemon.id,
     authentik_provider_proxy.traefik_dashboard.id,
   ]
 }

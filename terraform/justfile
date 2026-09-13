@@ -88,6 +88,18 @@ invite-friend name email='':
     'https://auth.jort.haus/api/v3/stages/invitation/invitations/' | jq -er '.pk')
   printf 'https://auth.jort.haus/if/flow/jorthaus-friend-enrollment/?itoken=%s\n' "$invitation_id"
 
+# write the Home Assistant long-lived token used by AppDaemon
+[script]
+[group('secret')]
+appdaemon-token:
+  printf '%s' 'Home Assistant long-lived token: '
+  stty -echo
+  trap 'stty echo; unset HA_TOKEN' EXIT HUP INT TERM
+  IFS= read -r HA_TOKEN
+  stty echo
+  printf '\n'
+  printf '%s' "$HA_TOKEN" | vault kv put -mount=home-assistant appdaemon ha_token=-
+
 # plan terraform changes for infra
 [group('terraform')]
 [working-directory: 'terraform/infra']

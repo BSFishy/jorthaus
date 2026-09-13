@@ -1,0 +1,31 @@
+lights:
+  module: light_controller
+  class: LightController
+
+  label: Light control
+
+  period_entity: input_select.light_period
+  presence_entity: binary_sensor.physical_presence
+  mode_entity: input_select.light_state
+  override_entity: light.light_override
+
+  transition: 5
+
+  # Used by Automatic and Force on.
+  # Brightness deliberately does not belong here.
+  default_settings:
+    hs_color: [38.0, 47.0]
+
+  # These describe brightness over the normal day.
+  period_settings:
+    Sleep:
+      enabled: false
+
+    Morning:
+      brightness_pct: 15
+
+    Day:
+      brightness_pct: 100
+
+    Evening:
+      brightness_pct: 35
