@@ -375,15 +375,20 @@ in
 
     # This cluster starts without the built-in flannel dataplane so a
     # dedicated CNI such as Cilium can own pod networking from the outset.
-    systemd.services.k3s =
-      lib.mkIf
+    systemd.services.k3s = lib.mkMerge [
+      # K3s owns containerd and its shims; stopping the unit must stop the entire runtime cgroup.
+      (lib.mkIf enabled {
+        serviceConfig.KillMode = lib.mkForce "control-group";
+      })
+      (lib.mkIf
         (
           enabled && cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname
         )
         {
           after = [ "jorthaus-postgres-ensure.service" ];
           wants = [ "jorthaus-postgres-ensure.service" ];
-        };
+        })
+    ];
 
     services.k3s = lib.mkIf enabled {
       enable = true;
