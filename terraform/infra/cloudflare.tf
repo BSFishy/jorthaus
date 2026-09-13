@@ -6,8 +6,8 @@ variable "cloudflare_zone_id" {
 
 variable "cloudflare_blocked_subdomains" {
   type        = set(string)
-  default     = ["appdaemon", "auth", "home", "node", "service", "traefik"]
-  description = "Subdomains that should resolve publicly to 0.0.0.0 to prevent wildcard proxy matches."
+  default     = ["node", "service"]
+  description = "Subdomains excluded from the public wildcard proxy."
 }
 
 resource "cloudflare_dns_record" "blocked_subdomain" {
