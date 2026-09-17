@@ -147,6 +147,8 @@ spec:
       name: multus
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
   template:
     metadata:
       labels:
@@ -169,10 +171,10 @@ spec:
           resources:
             requests:
               cpu: "100m"
-              memory: "50Mi"
+              memory: "256Mi"
             limits:
               cpu: "100m"
-              memory: "50Mi"
+              memory: "512Mi"
           securityContext:
             privileged: true
           terminationMessagePolicy: FallbackToLogsOnError
