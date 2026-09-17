@@ -1,0 +1,15 @@
+releases:
+  - name: forgejo-config
+    namespace: forgejo
+    createNamespace: true
+    chart: ./config-chart
+
+  - name: forgejo
+    namespace: forgejo
+    createNamespace: true
+    chart: oci://code.forgejo.org/forgejo-helm/forgejo
+    version: 14.0.3
+    needs:
+      - forgejo/forgejo-config
+    values:
+      - values/forgejo.yaml

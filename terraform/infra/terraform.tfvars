@@ -17,10 +17,13 @@ dns_hosts = {
   "s3.service"             = "10.1.11.15"
   "k8s.service"            = "10.1.11.16"
   "mc"                     = "10.1.12.10"
+  "ssh.git"                = "10.1.12.21"
 }
 
 minecraft_public_hostname           = "mc"
 minecraft_velocity_load_balancer_ip = "10.1.12.10"
+forgejo_ssh_public_hostname         = "ssh.git"
+forgejo_ssh_load_balancer_ip        = "10.1.12.21"
 cloudflare_ddns_login               = "jort.haus"
 
 frr_enable      = true

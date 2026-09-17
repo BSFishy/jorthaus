@@ -12,4 +12,5 @@ helmfiles:
   - path: cert-manager/helmfile.yaml
   - path: authentik/helmfile.yaml
   - path: postgres-backup/helmfile.yaml
+  - path: forgejo/helmfile.yaml
   - path: minecraft/helmfile.yaml

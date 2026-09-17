@@ -1,0 +1,102 @@
+replicaCount: 1
+
+strategy:
+  type: Recreate
+
+image:
+  tag: 12.0.4
+
+serviceAccount:
+  create: false
+  name: forgejo
+
+persistence:
+  enabled: true
+  create: false
+  claimName: forgejo-data
+
+service:
+  ssh:
+    type: LoadBalancer
+    loadBalancerIP: 10.1.12.21
+
+gitea:
+  admin:
+    existingSecret: forgejo-bootstrap
+    email: forgejo-recovery@jort.haus
+    passwordMode: initialOnlyNoReset
+
+  oauth:
+    - name: authentik
+      provider: openidConnect
+      existingSecret: forgejo-oidc
+      autoDiscoverUrl: https://auth.jort.haus/application/o/forgejo/.well-known/openid-configuration
+      iconUrl: https://auth.jort.haus/static/dist/assets/icons/icon.png
+      scopes: openid email profile groups
+      requiredClaimName: ""
+      requiredClaimValue: ""
+      groupClaimName: groups
+      adminGroup: jorthaus-admins
+
+  additionalConfigFromEnvs:
+    - name: FORGEJO__DATABASE__USER
+      valueFrom:
+        secretKeyRef:
+          name: forgejo-database
+          key: username
+    - name: FORGEJO__DATABASE__PASSWD
+      valueFrom:
+        secretKeyRef:
+          name: forgejo-database
+          key: password
+    - name: FORGEJO__SECURITY__INTERNAL_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: forgejo-config
+          key: internal_token
+    - name: FORGEJO__SECURITY__SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: forgejo-config
+          key: secret_key
+    - name: FORGEJO__SERVER__LFS_JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: forgejo-config
+          key: lfs_jwt_secret
+
+  config:
+    server:
+      DOMAIN: git.jort.haus
+      ROOT_URL: https://git.jort.haus/
+      SSH_DOMAIN: ssh.git.jort.haus
+      SSH_PORT: 22
+    database:
+      DB_TYPE: postgres
+      HOST: postgres.service.jort.haus:5432
+      NAME: forgejo
+      SSL_MODE: verify-full
+    oauth2_client:
+      ENABLE_AUTO_REGISTRATION: true
+    service:
+      REGISTER_MANUAL_CONFIRM: false
+    actions:
+      ENABLED: false
+
+extraVolumes:
+  - name: secrets-store
+    csi:
+      driver: secrets-store.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: forgejo-openbao
+
+extraInitVolumeMounts:
+  - name: secrets-store
+    mountPath: /run/secrets/jorthaus/forgejo
+    readOnly: true
+
+extraContainerVolumeMounts:
+  - name: secrets-store
+    mountPath: /run/secrets/jorthaus/forgejo
+    readOnly: true

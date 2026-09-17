@@ -301,6 +301,13 @@ in
           memberships = [ "authentik" ];
         };
 
+        forgejo.login = false;
+        forgejo_app = {
+          login = true;
+          memberships = [ "forgejo" ];
+          connectionLimit = 5;
+        };
+
         ${walGBackupRole} = {
           login = true;
           replication = true;
@@ -310,12 +317,23 @@ in
         };
       };
 
-      databases.authentik = {
-        owner = "authentik";
-        schemas.public = {
+      databases = {
+        authentik = {
           owner = "authentik";
-          grantAllTo = [ "authentik" ];
-          defaultPrivilegesFor = [ "authentik" ];
+          schemas.public = {
+            owner = "authentik";
+            grantAllTo = [ "authentik" ];
+            defaultPrivilegesFor = [ "authentik" ];
+          };
+        };
+
+        forgejo = {
+          owner = "forgejo";
+          schemas.public = {
+            owner = "forgejo";
+            grantAllTo = [ "forgejo" ];
+            defaultPrivilegesFor = [ "forgejo" ];
+          };
         };
       };
     };
