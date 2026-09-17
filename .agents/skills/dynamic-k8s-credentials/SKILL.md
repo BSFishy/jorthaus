@@ -23,20 +23,34 @@ adopt them without exposing secret values.
      field unless the provider explicitly guarantees that they share one cached
      response.
 
-2. **Materialize coupled fields atomically**
+2. **Classify static credentials separately**
+   - A static database role returns one persisted username/password pair until
+     its scheduled rotation. Verify that property before mapping its fields as
+     separate CSI objects.
+   - Treat the scheduled rotation as a credential-change boundary: validate the
+     refreshed pair and restart consumers that read it through environment
+     variables.
+
+3. **Materialize coupled fields atomically**
    - When a CSI provider cannot map multiple fields from one dynamic read,
      use a purpose-built sync workload or agent that reads once and writes the
      resulting Kubernetes Secret atomically.
    - Preserve the Secret name and key contract expected by the application.
 
-3. **Validate without printing values**
+4. **Keep CSI secret synchronization live**
+   - `SecretProviderClass.secretObjects` are synchronized when a pod mounts the
+     CSI volume. Mount the volume on the long-lived consumer when it supplies
+     that consumer's Kubernetes Secrets.
+   - Verify the synchronized Secret key set after the consumer becomes Ready.
+
+5. **Validate without printing values**
    - Report key names, lease metadata, and boolean checks only.
    - Test a newly materialized credential pair from the workload network path
      using the real transport settings, such as database TLS verification.
    - Confirm the application can authenticate before treating a Secret update
      as successful.
 
-4. **Plan consumer adoption**
+6. **Plan consumer adoption**
    - Environment-variable consumers do not reload when a Kubernetes Secret
      changes.
    - Use a controlled rollout or an application-native reload after validating
@@ -45,7 +59,7 @@ adopt them without exposing secret values.
    - Account for rollout duration, credential overlap, and lease expiry before
      revoking an old credential.
 
-5. **Verify the complete lifecycle**
+7. **Verify the complete lifecycle**
    - Confirm the issuer policy, Kubernetes auth binding, Secret sync, consumer
      rollout, and application logs after one full refresh.
    - Treat repeated authentication errors as a credential-lifecycle incident;
