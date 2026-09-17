@@ -38,7 +38,8 @@ appdaemon-deploy:
 # verify nix diagnostics pass
 [group('nix')]
 nix-check:
-  @find . -name '*.nix' | xargs nil diagnostics --deny-warnings
+  find . -name '*.nix' | xargs nil diagnostics --deny-warnings
+  nix --option abort-on-warn true --option warn-dirty false flake check --all-systems
 
 # ssh into a nixos node
 [group('nix')]
