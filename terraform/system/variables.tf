@@ -16,6 +16,30 @@ variable "valkey_admin_password" {
   sensitive   = true
 }
 
+variable "home_assistant_backup_bucket_name" {
+  type        = string
+  description = "Globally unique Backblaze B2 bucket name for Home Assistant backups."
+  default     = "jorthaus-home-assistant-backups"
+}
+
+variable "home_assistant_backup_s3_endpoint" {
+  type        = string
+  description = "S3-compatible Backblaze B2 endpoint used by Home Assistant backup clients."
+  default     = "https://s3.us-east-005.backblazeb2.com"
+}
+
+variable "home_assistant_backup_aws_region" {
+  type        = string
+  description = "AWS region value to expose to S3-compatible Home Assistant backup clients."
+  default     = "us-east-005"
+}
+
+variable "home_assistant_backup_prefix" {
+  type        = string
+  description = "Object-key prefix the Home Assistant backup key may access."
+  default     = "home-assistant/"
+}
+
 variable "minecraft_backup_bucket_name" {
   type        = string
   description = "Globally unique Backblaze B2 bucket name for Minecraft restic backups."
