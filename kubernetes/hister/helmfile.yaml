@@ -1,0 +1,5 @@
+releases:
+  - name: hister
+    namespace: hister
+    createNamespace: true
+    chart: ./config-chart

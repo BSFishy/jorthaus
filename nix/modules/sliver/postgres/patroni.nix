@@ -308,6 +308,13 @@ in
           connectionLimit = 5;
         };
 
+        hister.login = false;
+        hister_app = {
+          login = true;
+          memberships = [ "hister" ];
+          connectionLimit = 5;
+        };
+
         ${walGBackupRole} = {
           login = true;
           replication = true;
@@ -333,6 +340,15 @@ in
             owner = "forgejo";
             grantAllTo = [ "forgejo" ];
             defaultPrivilegesFor = [ "forgejo" ];
+          };
+        };
+
+        hister = {
+          owner = "hister";
+          schemas.public = {
+            owner = "hister";
+            grantAllTo = [ "hister" ];
+            defaultPrivilegesFor = [ "hister" ];
           };
         };
       };

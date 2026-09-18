@@ -1,0 +1,162 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hister
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hister-data
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: seaweedfs-storage
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hister
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hister
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hister
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: hister
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hister
+          image: ghcr.io/asciimoo/hister@sha256:8778a526cdb13049810a4d3c22590e5257e24959772ad52617b7c59d4f4fea49
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HISTER__APP__USER_HANDLING
+              value: "true"
+            - name: HISTER__SEMANTIC_SEARCH__ENABLE
+              value: "false"
+            - name: HISTER__SERVER__ADDRESS
+              value: 0.0.0.0:4433
+            - name: HISTER__SERVER__BASE_URL
+              value: https://hister.jort.haus
+            - name: HISTER__SERVER__DATABASE
+              value: host=postgres.service.jort.haus user=hister_app dbname=hister port=5432 sslmode=verify-full sslrootcert=system
+            - name: HISTER__SERVER__OAUTH_ONLY
+              value: "true"
+            - name: HISTER__SERVER__OAUTH__OIDC__CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hister-oidc
+                  key: client_id
+            - name: HISTER__SERVER__OAUTH__OIDC__CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hister-oidc
+                  key: client_secret
+            - name: HISTER__SERVER__OAUTH__OIDC__CONFIGURATION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hister-oidc
+                  key: discovery_url
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hister-database
+                  key: password
+          ports:
+            - name: http
+              containerPort: 4433
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: data
+              mountPath: /hister/data
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: hister-data
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: hister-openbao
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hister
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: hister
+  ports:
+    - name: http
+      port: 4433
+      targetPort: http
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hister
+  namespace: {{ .Release.Namespace }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`hister.jort.haus`)
+      kind: Rule
+      services:
+        - name: hister
+          port: 4433
+  tls: {}
