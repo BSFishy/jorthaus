@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hister-volsync
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: hister-volsync-openbao
+  namespace: {{ .Release.Namespace }}
+spec:
+  provider: vault
+  secretObjects:
+    - secretName: hister-volsync-restic
+      type: Opaque
+      data:
+        - objectName: restic_repository
+          key: RESTIC_REPOSITORY
+        - objectName: restic_password
+          key: RESTIC_PASSWORD
+        - objectName: aws_access_key_id
+          key: AWS_ACCESS_KEY_ID
+        - objectName: aws_secret_access_key
+          key: AWS_SECRET_ACCESS_KEY
+        - objectName: aws_region
+          key: AWS_DEFAULT_REGION
+  parameters:
+    roleName: hister-volsync
+    vaultAuthMountPath: kubernetes
+    audience: vault
+    vaultAddress: https://openbao.service.jort.haus:8200
+    objects: |
+      - objectName: "restic_repository"
+        secretPath: "backup/data/hister-volsync"
+        secretKey: "restic_repository"
+      - objectName: "restic_password"
+        secretPath: "backup/data/hister-volsync"
+        secretKey: "restic_password"
+      - objectName: "aws_access_key_id"
+        secretPath: "backup/data/hister-volsync"
+        secretKey: "aws_access_key_id"
+      - objectName: "aws_secret_access_key"
+        secretPath: "backup/data/hister-volsync"
+        secretKey: "aws_secret_access_key"
+      - objectName: "aws_region"
+        secretPath: "backup/data/hister-volsync"
+        secretKey: "aws_region"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hister-volsync-secret-sync
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hister-volsync-secret-sync
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hister-volsync-secret-sync
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: hister-volsync
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sync
+          image: busybox:1.37.0
+          command:
+            - sh
+            - -ec
+            - |
+              while true; do
+                for path in /mnt/secrets-store/*; do
+                  test -f "$path" || continue
+                  test -s "$path"
+                done
+                sleep 3600
+              done
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: hister-volsync-openbao
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: hister-restic
+  namespace: {{ .Release.Namespace }}
+spec:
+  sourcePVC: hister-data
+  trigger:
+    # Keep backup movers from competing for cluster and uplink I/O.
+    schedule: "00 02 * * *"
+  restic:
+    repository: hister-volsync-restic
+    moverServiceAccount: hister-volsync
+    moverSecurityContext:
+      fsGroup: 65532
+      fsGroupChangePolicy: OnRootMismatch
+      runAsGroup: 65532
+      runAsNonRoot: true
+      runAsUser: 65532
+      seccompProfile:
+        type: RuntimeDefault
+    # Direct copying is the available filesystem backup mode while SeaweedFS CSI
+    # lacks clone and snapshot support for a point-in-time source.
+    copyMethod: Direct
+    pruneIntervalDays: 7
+    cacheCapacity: 1Gi
+    moverResources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    retain:
+      daily: 7
+      weekly: 4
+      monthly: 6

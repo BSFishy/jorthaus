@@ -1,0 +1,12 @@
+repositories:
+  - name: backube
+    url: https://backube.github.io/helm-charts
+
+releases:
+  - name: volsync
+    namespace: volsync-system
+    createNamespace: true
+    chart: backube/volsync
+    version: 0.16.0
+    values:
+      - values/volsync.yaml

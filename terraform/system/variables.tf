@@ -63,3 +63,51 @@ variable "minecraft_backup_restic_prefix" {
   description = "Object key prefix inside the Minecraft backup bucket for the restic repository."
   default     = "restic/vanilla/"
 }
+
+variable "forgejo_volsync_bucket_name" {
+  type        = string
+  description = "Globally unique Backblaze B2 bucket name for Forgejo VolSync Restic backups."
+  default     = "jorthaus-forgejo-volsync"
+}
+
+variable "forgejo_volsync_s3_endpoint" {
+  type        = string
+  description = "S3-compatible Backblaze B2 endpoint used by Forgejo VolSync Restic backups."
+  default     = "https://s3.us-east-005.backblazeb2.com"
+}
+
+variable "forgejo_volsync_aws_region" {
+  type        = string
+  description = "AWS region value used by Forgejo VolSync Restic backups."
+  default     = "us-east-005"
+}
+
+variable "forgejo_volsync_restic_prefix" {
+  type        = string
+  description = "Object key prefix inside the Forgejo VolSync bucket for its Restic repository."
+  default     = "restic/forgejo/"
+}
+
+variable "hister_volsync_bucket_name" {
+  type        = string
+  description = "Globally unique Backblaze B2 bucket name for Hister VolSync Restic backups."
+  default     = "jorthaus-hister-volsync"
+}
+
+variable "hister_volsync_s3_endpoint" {
+  type        = string
+  description = "S3-compatible Backblaze B2 endpoint used by Hister VolSync Restic backups."
+  default     = "https://s3.us-east-005.backblazeb2.com"
+}
+
+variable "hister_volsync_aws_region" {
+  type        = string
+  description = "AWS region value used by Hister VolSync Restic backups."
+  default     = "us-east-005"
+}
+
+variable "hister_volsync_restic_prefix" {
+  type        = string
+  description = "Object key prefix inside the Hister VolSync bucket for its Restic repository."
+  default     = "restic/hister/"
+}

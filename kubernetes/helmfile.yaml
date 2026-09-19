@@ -1,4 +1,6 @@
 helmfiles:
+  - path: snapshot-controller/helmfile.yaml
+  - path: volsync/helmfile.yaml
   - path: cilium-system/helmfile.yaml
   - path: openbao-csi/helmfile.yaml
   - path: multus/helmfile.yaml

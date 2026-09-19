@@ -1,0 +1,19 @@
+installCRDs: true
+keepCRDs: true
+
+controller:
+  args:
+    featureGates: CSIVolumeGroupSnapshot=false
+  image:
+    tag: v8.6.0@sha256:81e79f205083f105e573ba2ebfe5964ede7f69a154e8627f53ebbbccd3ed9f70
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  revisionHistoryLimit: 2
+
+webhook:
+  enabled: false
