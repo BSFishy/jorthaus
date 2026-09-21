@@ -350,6 +350,12 @@ in
         group = "k3s";
         mode = "0700";
       }
+      {
+        directory = "/etc/rancher/node";
+        user = "root";
+        group = "root";
+        mode = "0755";
+      }
     ];
 
     networking.firewall.allowedTCPPorts = lib.mkIf controlplaneEnabled [ cfg.api.port ];
