@@ -8,5 +8,7 @@ _:
     ./valkey.nix
     ./k3s.nix
     ./seaweedfs
+    ./victorialogs.nix
+    ./xfs-quotas.nix
   ];
 }

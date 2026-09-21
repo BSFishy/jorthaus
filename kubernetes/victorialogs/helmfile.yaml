@@ -1,0 +1,5 @@
+releases:
+  - name: victorialogs
+    namespace: victorialogs
+    createNamespace: true
+    chart: ./config-chart

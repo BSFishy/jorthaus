@@ -8,6 +8,7 @@
     etcd.enable = true;
     postgres.enable = true;
     valkey.enable = true;
+    victorialogs.enable = true;
     k3s = {
       enable = true;
       role = "controlplane";
@@ -41,6 +42,16 @@
         device = "/dev/disk/by-id/nvme-Samsung_SSD_990_EVO_Plus_2TB_S7U6NU0Y708885P";
         label = "storage";
         mountpoint = "/srv/storage";
+        projects = {
+          seaweedfs = {
+            quota = "1600g";
+            enforce = true;
+          };
+          victorialogs = {
+            quota = "100g";
+            enforce = true;
+          };
+        };
       }
     ];
   };

@@ -16,4 +16,5 @@ helmfiles:
   - path: postgres-backup/helmfile.yaml
   - path: forgejo/helmfile.yaml
   - path: hister/helmfile.yaml
+  - path: victorialogs/helmfile.yaml
   - path: minecraft/helmfile.yaml

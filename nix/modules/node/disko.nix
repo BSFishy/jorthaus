@@ -31,8 +31,11 @@ let
             dataDisk.label
           ];
         }
-        // lib.optionalAttrs (dataDisk.mountOptions != null) {
-          mountOptions = dataDisk.mountOptions;
+        // lib.optionalAttrs (dataDisk.mountOptions != null || dataDisk.projects != { }) {
+          mountOptions = lib.unique (
+            lib.optionals (dataDisk.mountOptions != null) dataDisk.mountOptions
+            ++ lib.optionals (dataDisk.projects != { }) [ "prjquota" ]
+          );
         };
       };
     };

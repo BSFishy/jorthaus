@@ -7,9 +7,27 @@
 }:
 let
   cfg = config.jorthaus.seaweedfs;
+  projectDisks = lib.filter (disk: disk.projects ? seaweedfs) host.install.dataDisks;
+  projectDefined = projectDisks != [ ];
+  projectDisk = if projectDefined then lib.head projectDisks else null;
+  quotaEnabled = projectDefined && projectDisk.projects.seaweedfs.enforce;
 in
 {
   config = lib.mkIf (cfg.enable && cfg.dataplaneEnabled) {
+    assertions = [
+      {
+        assertion = !projectDefined || lib.length projectDisks == 1;
+        message = "SeaweedFS requires exactly one data-disk project on ${host.hostname}.";
+      }
+    ];
+
+    jorthaus.xfsQuota.projects.seaweedfs = lib.mkIf quotaEnabled {
+      id = 100;
+      fileSystem = projectDisk.mountpoint;
+      path = "${projectDisk.mountpoint}/seaweedfs/volume";
+      quota = projectDisk.projects.seaweedfs.quota;
+    };
+
     users = {
       groups.seaweedfs = { };
 
@@ -37,7 +55,9 @@ in
       after = [
         "network-online.target"
         "jorthaus-seaweedfs-pki-renew.service"
-      ];
+      ]
+      ++ lib.optionals quotaEnabled [ "xfs_quota-seaweedfs.service" ];
+      requires = lib.optionals quotaEnabled [ "xfs_quota-seaweedfs.service" ];
       wants = [
         "network-online.target"
         "jorthaus-seaweedfs-pki-renew.service"

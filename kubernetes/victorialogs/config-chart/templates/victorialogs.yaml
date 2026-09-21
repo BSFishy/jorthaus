@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: victorialogs
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - name: http
+      port: 9428
+      protocol: TCP
+      targetPort: 9428
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ExternalName
+  externalName: authentik-server.authentik.svc.cluster.local
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: victorialogs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    kubernetes.io/service-name: victorialogs
+addressType: IPv4
+ports:
+  - name: http
+    protocol: TCP
+    port: 9428
+endpoints:
+  - addresses: ["10.1.10.1"]
+    conditions:
+      ready: true
+  - addresses: ["10.1.10.2"]
+    conditions:
+      ready: true
+  - addresses: ["10.1.10.3"]
+    conditions:
+      ready: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: victorialogs-authentik
+  namespace: {{ .Release.Namespace }}
+spec:
+  forwardAuth:
+    address: http://authentik-server.authentik.svc.cluster.local/outpost.goauthentik.io/auth/traefik
+    maxResponseBodySize: 1048576
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-authentik-username
+      - X-authentik-groups
+      - X-authentik-entitlements
+      - X-authentik-email
+      - X-authentik-name
+      - X-authentik-uid
+      - X-authentik-jwt
+      - X-authentik-meta-jwks
+      - X-authentik-meta-outpost
+      - X-authentik-meta-provider
+      - X-authentik-meta-app
+      - X-authentik-meta-version
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: victorialogs
+  namespace: {{ .Release.Namespace }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`logs.jort.haus`) && PathPrefix(`/outpost.goauthentik.io/`)
+      kind: Rule
+      priority: 20
+      services:
+        - name: authentik-server
+          port: 80
+    - match: Host(`logs.jort.haus`)
+      kind: Rule
+      priority: 10
+      middlewares:
+        - name: victorialogs-authentik
+      services:
+        - name: victorialogs
+          port: 9428
+  tls: {}

@@ -27,6 +27,7 @@ in
     slivers.openbao.enable = mkEnableOption "the OpenBao sliver";
     slivers.postgres.enable = mkEnableOption "the Patroni/Postgres sliver";
     slivers.valkey.enable = mkEnableOption "the Valkey sliver";
+    slivers.victorialogs.enable = mkEnableOption "the VictoriaLogs sliver";
     slivers.k3s = {
       enable = mkEnableOption "the k3s sliver";
       bootstrapOnly = mkEnableOption "the k3s secret bootstrap path without starting k3s";
@@ -171,6 +172,26 @@ in
                 type = types.nullOr (types.listOf types.str);
                 default = null;
                 description = "Optional mount options for the data disk.";
+              };
+
+              projects = mkOption {
+                type = types.attrsOf (
+                  types.submodule {
+                    options = {
+                      quota = mkOption {
+                        type = types.str;
+                        description = "Hard XFS project quota as a whole GiB value with a lowercase g suffix.";
+                      };
+                      enforce = mkOption {
+                        type = types.bool;
+                        default = false;
+                        description = "Whether this project's XFS quota is enforced on this host.";
+                      };
+                    };
+                  }
+                );
+                default = { };
+                description = "Storage projects allocated from this data disk.";
               };
             };
           }
