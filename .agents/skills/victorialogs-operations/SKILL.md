@@ -38,19 +38,12 @@ for host in 10.1.10.1 10.1.10.2 10.1.10.3; do
 done
 ```
 
-## Query a known record
+## Query cookbook
 
-Use a known marker and require it from every replica:
-
-```bash
-marker='replace-with-a-specific-marker'
-for host in 10.1.10.1 10.1.10.2 10.1.10.3; do
-  echo "== $host =="
-  curl --fail --silent "http://$host:9428/select/logsql/query" \
-    --data-urlencode "query=$marker" \
-    --data-urlencode 'limit=10'
-done
-```
+Read [the query cookbook](references/query-cookbook.md) before forming an
+interactive query. It covers bounded `curl` requests, Kubernetes and journald
+filters, counts and rates, safe `jq` processing, replica comparisons, and
+redaction requirements.
 
 A Kubernetes record has stream labels including `host`, `source`, namespace,
 pod, container, and stdout/stderr stream. A journald record has stream labels
