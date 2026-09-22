@@ -9,6 +9,7 @@
     postgres.enable = true;
     valkey.enable = true;
     victorialogs.enable = true;
+    fluentBit.enable = true;
     k3s = {
       enable = true;
       role = "controlplane";

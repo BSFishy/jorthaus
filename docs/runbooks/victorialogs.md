@@ -67,6 +67,60 @@ curl --fail --silent "$endpoint/select/logsql/query" \
 `/select/logsql/query` returns JSON lines. Bound broad queries with `limit` or
 a LogsQL time filter before using them interactively against collected logs.
 
+## Fluent Bit collection
+
+Fluent Bit runs natively on `gaia-01` through `gaia-05`. It reads journald and
+K3s CRI files below `/var/log/pods` without Kubernetes API access, then sends
+each record to every VictoriaLogs replica. Cursor databases and filesystem
+chunks persist at `/var/lib/fluent-bit`.
+
+Kubernetes records use these stream fields: `host`, `source`,
+`kubernetes_namespace`, `kubernetes_pod`, `kubernetes_container`, and
+`stream`. Journald records use `host`, `source`, `journal_unit`,
+`journal_identifier`, `journal_priority`, and `journal_transport`. These fields
+are available as stream-label filters in the VictoriaLogs UI for newly ingested
+records. The full native journald fields remain on the record.
+
+The collector caps each input's memory buffer at 64 MiB, loaded filesystem
+backlog at 128 MiB, and the service at 512 MiB. Each HTTP output has a 10 GiB
+filesystem-buffer limit. The service logs warnings and errors so that routine
+successful delivery does not grow the journal.
+
+Verify the collector and its persistent state on every host:
+
+```bash
+for h in gaia-01 gaia-02 gaia-03 gaia-04 gaia-05; do
+  echo "== $h =="
+  ssh matt@$h.node.jort.haus \
+    'systemctl is-active fluent-bit && \
+     findmnt -no SOURCE,TARGET /var/lib/fluent-bit && \
+     sudo find /var/lib/fluent-bit/cursors -maxdepth 1 -type f -name "*.db" -printf "%f\\n" && \
+     sudo du -sh /var/lib/fluent-bit'
+done
+```
+
+To verify fan-out, write one controlled journal marker on a selected host and
+require it from all three direct query endpoints:
+
+```bash
+marker=fluent-bit-check-$(date -u +%Y%m%dT%H%M%SZ)
+ssh matt@gaia-04.node.jort.haus \
+  "sudo logger -p user.notice -t fluent-bit-check '$marker'"
+
+for endpoint in http://10.1.10.1:9428 http://10.1.10.2:9428 http://10.1.10.3:9428; do
+  curl --fail --silent "$endpoint/select/logsql/query" \
+    --data-urlencode "query=$marker" \
+    --data-urlencode 'limit=1' | grep -F "$marker"
+done
+```
+
+When one destination is unavailable, Fluent Bit retains its pending output in
+its filesystem buffer and continues delivering to healthy destinations. Restore
+the destination, then query for a marker created during the outage on each
+replica before considering the outage recovered. Do not delete cursors or
+chunk files to clear an outage; inspect available space, the output warnings,
+and destination health first.
+
 ## Service recovery
 
 Do not delete, reinitialize, or copy the data directory while VictoriaLogs is

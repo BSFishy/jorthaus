@@ -28,6 +28,7 @@ in
     slivers.postgres.enable = mkEnableOption "the Patroni/Postgres sliver";
     slivers.valkey.enable = mkEnableOption "the Valkey sliver";
     slivers.victorialogs.enable = mkEnableOption "the VictoriaLogs sliver";
+    slivers.fluentBit.enable = mkEnableOption "the Fluent Bit sliver";
     slivers.k3s = {
       enable = mkEnableOption "the k3s sliver";
       bootstrapOnly = mkEnableOption "the k3s secret bootstrap path without starting k3s";

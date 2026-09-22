@@ -4,6 +4,7 @@
   facter = ./gaia-05-facter.json;
 
   slivers = {
+    fluentBit.enable = true;
     k3s = {
       enable = true;
       role = "dataplane";
