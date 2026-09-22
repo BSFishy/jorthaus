@@ -271,7 +271,12 @@ in
       address = serviceAddress;
       port = postgresPort;
       mode = "tcp";
+      # Authentik keeps PostgreSQL connections open for its outpost event path.
+      frontendConfig = ''
+        timeout client 1h
+      '';
       backendConfig = ''
+        timeout server 1h
         option httpchk GET /primary
         http-check expect status 200
         default-server on-marked-down shutdown-sessions
