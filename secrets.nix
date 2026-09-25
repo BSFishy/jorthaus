@@ -33,6 +33,7 @@ let
     gaia-04
     gaia-05
   ];
+  seaweedfs-s3-provisioner-hosts = [ gaia-01 ];
   k3s-hosts = [
     matt
     gaia-01
@@ -62,6 +63,9 @@ in
   "secrets/valkey-password.age".publicKeys = valkey-hosts;
   "secrets/seaweedfs-approle-role-id.age".publicKeys = seaweedfs-hosts;
   "secrets/seaweedfs-approle-secret-id.age".publicKeys = seaweedfs-hosts;
+  "secrets/seaweedfs-s3-provisioner-approle-role-id.age".publicKeys = seaweedfs-s3-provisioner-hosts;
+  "secrets/seaweedfs-s3-provisioner-approle-secret-id.age".publicKeys =
+    seaweedfs-s3-provisioner-hosts;
   "secrets/seaweedfs-jwt-filer-signing-key.age".publicKeys = seaweedfs-hosts;
   "secrets/k3s-approle-role-id.age".publicKeys = k3s-hosts;
   "secrets/k3s-approle-secret-id.age".publicKeys = k3s-hosts;
