@@ -335,11 +335,7 @@ in
 
     systemd.services.jorthaus-k3s-datastore-env = lib.mkIf controlplaneEnabled {
       description = "Render the agenix-backed K3s PostgreSQL datastore environment";
-      after = [
-        "agenix.service"
-        "systemd-tmpfiles-setup.service"
-      ];
-      requires = [ "agenix.service" ];
+      after = [ "systemd-tmpfiles-setup.service" ];
       before = [ "k3s.service" ];
       serviceConfig = {
         Type = "oneshot";
