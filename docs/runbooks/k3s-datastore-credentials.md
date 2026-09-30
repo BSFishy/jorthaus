@@ -54,10 +54,14 @@ use `k3s_static` and the agenix password. K3s reads the generated
 `/run/k3s/datastore-static.env`; Vault Agent continues maintaining the old
 `/run/k3s/datastore.env` for rollback until final cleanup. Never print either
 file. Switch Gaia-01, Gaia-02, and Gaia-03 one at a time. Before each switch,
-cordon and drain the node; after the switch, wait for K3s, the node, and running
-pods to recover before uncordoning. Keep the old OpenBao login valid until
-every control plane is using `k3s_static` and K3s datastore authentication is
-healthy.
+inspect node-local resources and verify evicted workloads can be scheduled
+elsewhere. If a hardware-bound workload cannot move, stop and arrange an
+approved maintenance plan before restarting that node. If drain refuses due to
+`emptyDir`, inspect the affected volume and its consumers; use
+`--delete-emptydir-data` only when every affected volume contains disposable
+scratch or sockets. After the switch, wait for K3s, the node, and running pods
+to recover before uncordoning. Keep the old OpenBao login valid until every
+control plane is using `k3s_static` and K3s datastore authentication is healthy.
 
 Verify the connected PostgreSQL login using a query that reports only role
 names and connection state. Never inspect or print the complete K3s process
