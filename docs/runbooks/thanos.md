@@ -14,9 +14,13 @@ Thanos Query, Store Gateway, and Compactor.
 - The Compactor is a single replica with persistent working storage. It
   compacts/downsamples blocks and retains raw, 5-minute, and 1-hour data for
   90 days. The two Store Gateway replicas serve the bucket to Query.
-- Thanos Query is a ClusterIP service. Its availability depends on Kubernetes;
-  this does not affect Prometheus scraping, local TSDB writes, or local alert
-  evaluation.
+- Thanos Query is available through the internal ClusterIP service and at
+  `https://metrics.jort.haus` through Traefik. The public route applies
+  Authentik forward authentication and grants access only to the
+  `jorthaus-admins` group; the Authentik outpost callback path routes directly
+  to Authentik. The query service itself remains ClusterIP-only. Query
+  availability depends on Kubernetes; this does not affect Prometheus
+  scraping, local TSDB writes, or local alert evaluation.
 
 The Thanos grant is bucket-scoped and includes delete permission for Compactor
 retention. Its credentials are provisioned through the SeaweedFS S3 registry
@@ -61,11 +65,14 @@ metric reports loaded object-store blocks. Thanos Query's
 ranges; query it through the internal ClusterIP or a temporary local
 port-forward.
 
-Use the project runner to inspect planned chart changes and apply the Thanos
-releases:
+Use the project runners to plan Authentik provider changes and inspect chart
+changes before applying. Apply the Authentik provider first, then the Thanos
+release so the forward-auth middleware has an application to evaluate:
 
 ```bash
+just plan-apps
 just k8s-diff thanos
+just apply-apps
 just k8s-apply thanos
 ```
 

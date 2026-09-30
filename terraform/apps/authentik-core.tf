@@ -11,6 +11,7 @@ locals {
     authentik_provider_proxy.appdaemon.id,
     authentik_provider_proxy.traefik_dashboard.id,
     authentik_provider_proxy.victorialogs.id,
+    authentik_provider_proxy.thanos.id,
   ]
 }
 
