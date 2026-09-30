@@ -50,11 +50,14 @@ credential. Keep that credential and its OpenBao policy available.
 ## Cut over control planes
 
 After the parallel role is verified, change the K3s datastore environment to
-use `k3s_static` and the agenix password. Switch Gaia-01, Gaia-02, and Gaia-03
-one at a time. Before each switch, cordon and drain the node; after the switch,
-wait for K3s, the node, and running pods to recover before uncordoning. Keep
-the old OpenBao login valid until every control plane is using `k3s_static` and
-K3s datastore authentication is healthy.
+use `k3s_static` and the agenix password. K3s reads the generated
+`/run/k3s/datastore-static.env`; Vault Agent continues maintaining the old
+`/run/k3s/datastore.env` for rollback until final cleanup. Never print either
+file. Switch Gaia-01, Gaia-02, and Gaia-03 one at a time. Before each switch,
+cordon and drain the node; after the switch, wait for K3s, the node, and running
+pods to recover before uncordoning. Keep the old OpenBao login valid until
+every control plane is using `k3s_static` and K3s datastore authentication is
+healthy.
 
 Verify the connected PostgreSQL login using a query that reports only role
 names and connection state. Never inspect or print the complete K3s process

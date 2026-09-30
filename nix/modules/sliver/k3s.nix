@@ -44,7 +44,9 @@ let
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
   tokenFile = "/run/k3s/token";
-  datastoreEnvFile = "/run/k3s/datastore.env";
+  datastoreEnvFile = "/run/k3s/datastore-static.env";
+  # Keep OpenBao's rotating DSN separate so rollback remains available during cutover.
+  openbaoDatastoreEnvFile = "/run/k3s/datastore.env";
   agentDir = "/run/k3s-agent";
   ssdpRelayImage = import ../../packages/ssdp-relay.nix { inherit pkgs; };
   disableDefaults = [
@@ -302,7 +304,7 @@ in
         ]
         ++ lib.optionals controlplaneEnabled [
           {
-            destination = datastoreEnvFile;
+            destination = openbaoDatastoreEnvFile;
             perms = 288;
             contents = ''
               {{- with secret "postgres/static-creds/k3s" }}
@@ -329,6 +331,45 @@ in
         RuntimeDirectory = lib.mkForce "k3s-agent";
         RuntimeDirectoryMode = lib.mkForce "0750";
       };
+    };
+
+    systemd.services.jorthaus-k3s-datastore-env = lib.mkIf controlplaneEnabled {
+      description = "Render the agenix-backed K3s PostgreSQL datastore environment";
+      after = [
+        "agenix.service"
+        "systemd-tmpfiles-setup.service"
+      ];
+      requires = [ "agenix.service" ];
+      before = [ "k3s.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+      };
+      script = ''
+        set -euo pipefail
+        password="$(tr -d '\r\n' < ${
+          lib.escapeShellArg config.age.secrets.${datastorePasswordSecretName}.path
+        })"
+        if [[ ! $password =~ ^[0-9a-f]{64}$ ]]; then
+          echo "K3s datastore password has an unexpected format" >&2
+          exit 1
+        fi
+
+        umask 077
+        temporary="$(mktemp ${lib.escapeShellArg "${datastoreEnvFile}.XXXXXX"})"
+        cleanup() {
+          rm -f -- "$temporary"
+          unset password
+        }
+        trap cleanup EXIT
+
+        printf 'K3S_DATASTORE_ENDPOINT=postgres://k3s_static:%s@postgres.service.jort.haus:5432/k3s?sslmode=verify-full\n' "$password" > "$temporary"
+        chown root:k3s "$temporary"
+        chmod 0440 "$temporary"
+        mv -f -- "$temporary" ${lib.escapeShellArg datastoreEnvFile}
+        trap - EXIT
+        unset password
+      '';
     };
 
     jorthaus.postgres.ensure = {
@@ -401,6 +442,10 @@ in
       # K3s owns containerd and its shims; stopping the unit must stop the entire runtime cgroup.
       (lib.mkIf enabled {
         serviceConfig.KillMode = lib.mkForce "control-group";
+      })
+      (lib.mkIf controlplaneEnabled {
+        after = [ "jorthaus-k3s-datastore-env.service" ];
+        requires = [ "jorthaus-k3s-datastore-env.service" ];
       })
       (lib.mkIf
         (
