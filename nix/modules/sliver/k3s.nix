@@ -45,8 +45,6 @@ let
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
   tokenFile = "/run/k3s/token";
   datastoreEnvFile = "/run/k3s/datastore-static.env";
-  # Keep OpenBao's rotating DSN separate so rollback remains available during cutover.
-  openbaoDatastoreEnvFile = "/run/k3s/datastore.env";
   agentDir = "/run/k3s-agent";
   ssdpRelayImage = import ../../packages/ssdp-relay.nix { inherit pkgs; };
   disableDefaults = [
@@ -301,17 +299,6 @@ in
               {{- end }}
             '';
           }
-        ]
-        ++ lib.optionals controlplaneEnabled [
-          {
-            destination = openbaoDatastoreEnvFile;
-            perms = 288;
-            contents = ''
-              {{- with secret "postgres/static-creds/k3s" }}
-              K3S_DATASTORE_ENDPOINT=postgres://{{ .Data.username }}:{{ .Data.password }}@postgres.service.jort.haus:5432/k3s?sslmode=verify-full
-              {{- end }}
-            '';
-          }
         ];
       };
     };
@@ -369,7 +356,7 @@ in
     };
 
     jorthaus.postgres.ensure = {
-      users.k3s.login = true;
+      users.k3s.login = false;
       users.k3s_static = lib.mkIf controlplaneEnabled {
         login = true;
         passwordFile = config.age.secrets.${datastorePasswordSecretName}.path;

@@ -16,9 +16,6 @@ resource "vault_policy" "k3s" {
       capabilities = ["read"]
     }
 
-    path "postgres/static-creds/k3s" {
-      capabilities = ["read"]
-    }
   EOT
 }
 

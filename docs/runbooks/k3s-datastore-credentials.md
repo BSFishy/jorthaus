@@ -69,13 +69,21 @@ environment or datastore URL.
 
 ## Retire the old login
 
-Only after the rollout and rollback window are complete:
+Only after the rollout and rollback window are complete, and all three
+control planes have active `k3s_static` sessions with no sessions using `k3s`:
 
-1. Remove the K3s AppRole's permission to read
-   `postgres/static-creds/k3s` and remove the OpenBao static-role rotation.
-2. Set the PostgreSQL `k3s` role to `NOLOGIN`.
-3. Verify all K3s connections use `k3s_static` and no new connections use the
-   old login.
+1. Remove the old datastore template from the K3s Vault Agent configuration so
+   it continues to fetch only the bootstrap token. Set the PostgreSQL `k3s`
+   role to `NOLOGIN` in the ensure configuration and apply it on Gaia-01. Apply
+   the Vault Agent change to each control plane; confirm K3s remains healthy.
+2. After the Vault Agent no longer renders the old DSN, remove the stale
+   `/run/k3s/datastore.env` files without displaying their contents.
+3. Remove the K3s AppRole's permission to read
+   `postgres/static-creds/k3s` and remove the OpenBao static-role resource.
+   Run `just plan-system`, inspect the policy update and role deletion, then
+   apply with `just apply-system`.
+4. Verify all K3s connections use `k3s_static`, no new connections use `k3s`,
+   and the PostgreSQL `k3` role has `NOLOGIN`.
 
 Keep the `k3s` PostgreSQL role as a `NOLOGIN` owner role. It owns the database
 and schema; do not drop it or reassign those objects as part of credential
