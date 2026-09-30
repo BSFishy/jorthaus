@@ -85,6 +85,11 @@ secret-random name bytes='32':
   tmp=$(printf %s "$(nix-shell -p openssl --run 'openssl rand -hex {{bytes}}')")
   printf %s "$tmp" | agenix -e secrets/{{name}}
 
+# Create the encrypted static K3s datastore password without printing plaintext.
+[group('secret')]
+create-k3s-datastore-secret:
+  scripts/create-k3s-datastore-secret
+
 # generate & encrypt new openbao unsealing key
 [group('secret')]
 openbao-key name:

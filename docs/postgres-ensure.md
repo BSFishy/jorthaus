@@ -74,11 +74,20 @@ nix/modules/sliver/k3s.nix
 
 Ensures:
 
-- role `k3s` with `LOGIN`
+- role `k3s` with `LOGIN`, owning the K3s database and schema
+- role `k3s_static` with `LOGIN`, inheriting the `k3s` owner role
+- `k3s_static` password from the agenix-encrypted datastore password file,
+  applied through psql's password-safe prompt rather than a SQL argument
 - database `k3s` owned by `k3s`
 - schema `public` owned by `k3s`
 - existing table/sequence privileges for `k3s`
 - future table/sequence default privileges for `k3s`
+
+The parallel login role is provisioned before K3s consumers move to it. The
+control planes continue using the OpenBao-issued `k3s` credential until the
+one-node-at-a-time cutover is complete; preserve that credential during
+rollout. The `k3s` role remains as the database/schema owner after its LOGIN
+privilege and OpenBao rotation are retired.
 
 ### SeaweedFS
 

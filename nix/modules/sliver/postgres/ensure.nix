@@ -39,6 +39,14 @@ let
       ${lib.concatMapStrings (role: ''
         psql_postgres -tAc ${lib.escapeShellArg "GRANT ${quoteIdent role} TO ${ident};"}
       '') user.memberships}
+      ${lib.optionalString (user.passwordFile != null) ''
+        # psql hashes the password client-side before sending ALTER ROLE.
+        (
+          password="$(tr -d '\r\n' < ${lib.escapeShellArg user.passwordFile})"
+          printf '%s\n' ${lib.escapeShellArg "\\password ${name}"} "$password" "$password"
+          unset password
+        ) | psql_postgres -X -v ON_ERROR_STOP=1
+      ''}
       ${lib.concatStringsSep "\n" (
         lib.flatten (
           lib.mapAttrsToList (
@@ -135,6 +143,12 @@ in
               description = "Whether the ensured PostgreSQL role can log in.";
             };
 
+            passwordFile = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Optional file containing a static role password, applied with psql's password-safe prompt.";
+            };
+
             replication = lib.mkOption {
               type = lib.types.bool;
               default = false;
@@ -226,6 +240,7 @@ in
       lib.mkIf (bootstrapHost != null && host.hostname == bootstrapHost.hostname)
         {
           description = "Ensure PostgreSQL cluster roles, databases, and grants";
+          restartTriggers = [ ensureScript ];
           wantedBy = [ "multi-user.target" ];
           after = [
             "network-online.target"

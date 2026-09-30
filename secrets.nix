@@ -42,6 +42,12 @@ let
     gaia-04
     gaia-05
   ];
+  k3s-datastore-hosts = [
+    matt
+    gaia-01
+    gaia-02
+    gaia-03
+  ];
 
   all-nodes = [
     gaia-01
@@ -69,4 +75,5 @@ in
   "secrets/seaweedfs-jwt-filer-signing-key.age".publicKeys = seaweedfs-hosts;
   "secrets/k3s-approle-role-id.age".publicKeys = k3s-hosts;
   "secrets/k3s-approle-secret-id.age".publicKeys = k3s-hosts;
+  "secrets/k3s-datastore-password.age".publicKeys = k3s-datastore-hosts;
 }

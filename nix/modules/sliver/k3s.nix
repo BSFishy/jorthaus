@@ -40,6 +40,7 @@ let
   rebootSentinelFile = "/var/run/reboot-required";
   roleIdSecretName = "k3s-approle-role-id";
   secretIdSecretName = "k3s-approle-secret-id";
+  datastorePasswordSecretName = "k3s-datastore-password";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
   tokenFile = "/run/k3s/token";
@@ -231,6 +232,13 @@ in
       mode = "0440";
     };
 
+    age.secrets.${datastorePasswordSecretName} = lib.mkIf controlplaneEnabled {
+      file = ../../../secrets/k3s-datastore-password.age;
+      owner = "root";
+      group = "root";
+      mode = "0400";
+    };
+
     systemd.tmpfiles.rules = [
       # Secondary CNI attachments use the host CNI binary directory that k3s
       # exposes to the runtime.
@@ -291,7 +299,8 @@ in
               {{- end }}
             '';
           }
-        ] ++ lib.optionals controlplaneEnabled [
+        ]
+        ++ lib.optionals controlplaneEnabled [
           {
             destination = datastoreEnvFile;
             perms = 288;
@@ -324,6 +333,12 @@ in
 
     jorthaus.postgres.ensure = {
       users.k3s.login = true;
+      users.k3s_static = lib.mkIf controlplaneEnabled {
+        login = true;
+        passwordFile = config.age.secrets.${datastorePasswordSecretName}.path;
+        memberships = [ "k3s" ];
+        databaseGrants.k3s = [ "CONNECT" ];
+      };
 
       databases.k3s = {
         owner = "k3s";
@@ -394,7 +409,8 @@ in
         {
           after = [ "jorthaus-postgres-ensure.service" ];
           wants = [ "jorthaus-postgres-ensure.service" ];
-        })
+        }
+      )
     ];
 
     services.k3s = lib.mkIf enabled (
@@ -415,7 +431,8 @@ in
           "--write-kubeconfig-mode=0640"
           "--disable-network-policy"
           "--flannel-backend=none"
-        ] ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
+        ]
+        ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
       }
     );
 
