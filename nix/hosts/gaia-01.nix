@@ -10,6 +10,8 @@
     valkey.enable = true;
     victorialogs.enable = true;
     fluentBit.enable = true;
+    nodeExporter.enable = true;
+    prometheus.enable = true;
     k3s = {
       enable = true;
       role = "controlplane";
@@ -50,6 +52,10 @@
           };
           victorialogs = {
             quota = "100g";
+            enforce = true;
+          };
+          prometheus = {
+            quota = "25g";
             enforce = true;
           };
         };

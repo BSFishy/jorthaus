@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+usage() {
+  echo "Usage: $0 gaia-01|gaia-02|gaia-03|gaia-04|gaia-05" >&2
+  exit 2
+}
+
+[[ $# == 1 ]] || usage
+node=$1
+[[ $node =~ ^gaia-0[1-5]$ ]] || usage
+
+expected_api=https://k8s.service.jort.haus:6443
+actual_api=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+if [[ $actual_api != "$expected_api" ]]; then
+  echo "Refusing to operate on unexpected Kubernetes API: $actual_api" >&2
+  exit 1
+fi
+
+kubectl get node "$node" >/dev/null
+ready=$(kubectl get node "$node" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+unschedulable=$(kubectl get node "$node" -o jsonpath='{.spec.unschedulable}')
+[[ $ready == True ]] || { echo "$node is not Ready" >&2; exit 1; }
+[[ $unschedulable != true ]] || { echo "$node is already cordoned; refusing to assume ownership" >&2; exit 1; }
+
+cluster_node_states=$(kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}')
+while read -r cluster_node cluster_ready; do
+  [[ -n $cluster_node ]] || continue
+  [[ $cluster_ready == True ]] || { echo "cluster node $cluster_node is not Ready" >&2; exit 1; }
+done <<< "$cluster_node_states"
+
+controlplane_states=$(kubectl get nodes -l node-role.kubernetes.io/control-plane \
+  -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}')
+target_is_controlplane=0
+ready_controlplane_peers=0
+while read -r controlplane controlplane_ready; do
+  [[ -n $controlplane ]] || continue
+  [[ $controlplane_ready == True ]] || { echo "control-plane node $controlplane is not Ready" >&2; exit 1; }
+  if [[ $controlplane == "$node" ]]; then
+    target_is_controlplane=1
+  else
+    ready_controlplane_peers=$((ready_controlplane_peers + 1))
+  fi
+done <<< "$controlplane_states"
+if (( target_is_controlplane && ready_controlplane_peers < 2 )); then
+  echo "restarting a control-plane node requires two other Ready control-plane nodes" >&2
+  exit 1
+fi
+
+ssh_target="matt@$node.node.jort.haus"
+ssh_opts=(
+  -o BatchMode=yes
+  -o ConnectTimeout=10
+  -o ServerAliveInterval=5
+  -o ServerAliveCountMax=3
+)
+if ! ssh "${ssh_opts[@]}" "$ssh_target" sudo -n systemctl is-active --quiet k3s; then
+  echo "k3s is not active on $node or SSH/sudo is unavailable" >&2
+  exit 1
+fi
+
+cordoned=0
+restart_started=0
+restart_verified=0
+cleanup() {
+  status=$?
+  trap - EXIT
+  if (( cordoned )); then
+    if (( restart_started && ! restart_verified )); then
+      echo "Restart health checks did not complete; leaving $node cordoned for investigation" >&2
+    else
+      echo "Restoring schedulability on $node" >&2
+      if ! kubectl uncordon "$node"; then
+        echo "Failed to uncordon $node; inspect the node before resuming workloads" >&2
+        (( status == 0 )) && status=1
+      fi
+    fi
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+
+printf 'Cordoning %s\n' "$node"
+cordoned=1
+kubectl cordon "$node"
+
+printf 'Draining workloads from %s (DaemonSets remain; no force or emptyDir deletion)\n' "$node"
+kubectl drain "$node" --ignore-daemonsets --timeout="${K3S_DRAIN_TIMEOUT:-10m}"
+
+printf 'Restarting k3s on %s\n' "$node"
+restart_started=1
+timeout "${K3S_RESTART_TIMEOUT:-180s}" \
+  ssh "${ssh_opts[@]}" "$ssh_target" sudo -n systemctl restart k3s
+
+printf 'Waiting for k3s to become active on %s\n' "$node"
+service_ready=0
+for _ in $(seq 1 36); do
+  if timeout 20s ssh "${ssh_opts[@]}" "$ssh_target" sudo -n systemctl is-active --quiet k3s; then
+    service_ready=1
+    break
+  fi
+  sleep 5
+done
+(( service_ready )) || { echo "k3s did not become active on $node" >&2; exit 1; }
+
+printf 'Waiting for Kubernetes node %s to become Ready\n' "$node"
+kubectl wait --for=condition=Ready "node/$node" --timeout="${K3S_NODE_TIMEOUT:-5m}"
+
+printf 'Waiting for running pods on %s to become Ready\n' "$node"
+kubectl wait --all --for=condition=Ready pod --all-namespaces \
+  --field-selector="spec.nodeName=$node,status.phase=Running" \
+  --timeout="${K3S_POD_TIMEOUT:-5m}"
+
+restart_verified=1
+printf 'Uncordoning %s\n' "$node"
+kubectl uncordon "$node"
+
+unschedulable=$(kubectl get node "$node" -o jsonpath='{.spec.unschedulable}')
+[[ $unschedulable != true ]] || { echo "$node remains cordoned" >&2; exit 1; }
+cordoned=0
+printf 'K3s restart completed successfully on %s\n' "$node"

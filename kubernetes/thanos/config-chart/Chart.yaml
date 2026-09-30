@@ -1,0 +1,5 @@
+apiVersion: v2
+name: thanos-config
+description: Jorthaus Thanos OpenBao CSI configuration
+type: application
+version: 0.1.0

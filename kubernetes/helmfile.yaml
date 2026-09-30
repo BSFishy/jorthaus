@@ -17,4 +17,5 @@ helmfiles:
   - path: forgejo/helmfile.yaml
   - path: hister/helmfile.yaml
   - path: victorialogs/helmfile.yaml
+  - path: thanos/helmfile.yaml
   - path: minecraft/helmfile.yaml

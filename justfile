@@ -54,7 +54,14 @@ reboot host:
 # build and switch a nixos node
 [group('nix')]
 switch host:
+  # TODO: Orchestrate K3s-restarting switches: detect K3s, cordon and drain
+  # before activation, then uncordon after recovery only if this switch did.
   nh os switch --elevation-strategy passwordless --show-activation-logs --target-host {{host}}.node.jort.haus .#{{host}}
+
+# Restart K3s on one node using the documented cordon/drain procedure.
+[group('kubernetes')]
+restart-k8s host:
+  scripts/restart-k8s-node '{{host}}'
 
 # install a nixos node from a live environment over ssh
 [group('nix')]

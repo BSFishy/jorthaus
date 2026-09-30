@@ -222,9 +222,10 @@ or OpenBao resources.
 Each grant's KVv2 data contains exactly these fields: `access_key_id`, `bucket`,
 `endpoint`, `region`, and `secret_access_key`. Grant identity and permissions
 are defined by the Nix registry and SeaweedFS IAM policy, not duplicated in the
-KV record. No S3 grants are currently declared. The former pilot IAM identity,
-policy, and KVv2 binding have been removed; its pre-existing bucket
-`jorthaus-s3-provisioner-pilot` remains untouched.
+KV record. The Thanos bucket and grant are declared by the Prometheus sliver;
+its credentials are consumed by host Sidecars and Kubernetes Thanos components.
+The former pilot IAM identity, policy, and KVv2 binding have been removed; its
+pre-existing bucket `jorthaus-s3-provisioner-pilot` remains untouched.
 
 Provisioning progress and failures are available in the systemd journal:
 
@@ -343,9 +344,10 @@ and explicit approval.
 
 The provisioner is additive and never rotates an existing grant key. Do not
 edit a binding's credential fields manually or expect a normal retry to rotate
-them. Rotation is not yet an approved production procedure: host and Kubernetes
-consumers do not exist, version-pinned reads are untested, and a secret-safe
-key-generation and publication workflow has not been validated. On the pinned
+them. Rotation is not yet an approved production procedure. Thanos Sidecars
+and the Kubernetes Store Gateway/Compactor now consume this binding, but
+version-pinned reads, consumer refresh/rollback, and a secret-safe key-generation
+and publication workflow have not been validated. On the pinned
 SeaweedFS release, `s3.accesskey.create` prints generated access and secret
 keys; do not invoke it interactively or allow its output into logs.
 

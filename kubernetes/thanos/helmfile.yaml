@@ -1,0 +1,19 @@
+repositories:
+  - name: thanos-community
+    url: https://thanos-community.github.io/helm-charts
+
+releases:
+  - name: thanos-config
+    namespace: thanos
+    createNamespace: true
+    chart: ./config-chart
+
+  - name: thanos
+    namespace: thanos
+    createNamespace: true
+    needs:
+      - thanos/thanos-config
+    chart: thanos-community/thanos
+    version: 0.46.0
+    values:
+      - values/thanos.yaml

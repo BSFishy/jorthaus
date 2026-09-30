@@ -5,6 +5,8 @@
 
   slivers = {
     fluentBit.enable = true;
+    nodeExporter.enable = true;
+    alertmanager.enable = true;
     k3s = {
       enable = true;
       role = "dataplane";

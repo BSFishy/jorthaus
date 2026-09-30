@@ -106,6 +106,10 @@ resource "vault_policy" "seaweedfs" {
       capabilities = ["read"]
     }
 
+    path "seaweedfs/data/s3/bindings/thanos" {
+      capabilities = ["read"]
+    }
+
     path "seaweedfs/data/security" {
       capabilities = ["read"]
     }
@@ -185,6 +189,30 @@ resource "vault_kubernetes_auth_backend_role" "seaweedfs_csi" {
   bound_service_account_namespaces = ["kube-system"]
   audience                         = "vault"
   token_policies                   = [vault_policy.seaweedfs_csi.name]
+
+  token_type    = "service"
+  token_period  = 86400
+  token_ttl     = 3600
+  token_max_ttl = 14400
+}
+
+resource "vault_policy" "thanos_objstore" {
+  name = "thanos-objstore"
+
+  policy = <<-EOT
+    path "seaweedfs/data/s3/bindings/thanos" {
+      capabilities = ["read"]
+    }
+  EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "thanos_objstore" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "thanos-objstore"
+  bound_service_account_names      = ["thanos-storegateway", "thanos-compactor"]
+  bound_service_account_namespaces = ["thanos"]
+  audience                         = "vault"
+  token_policies                   = [vault_policy.thanos_objstore.name]
 
   token_type    = "service"
   token_period  = 86400

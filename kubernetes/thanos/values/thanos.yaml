@@ -1,0 +1,178 @@
+global:
+  image:
+    registry: quay.io
+    repository: thanos/thanos
+    tag: v0.42.4
+    pullPolicy: IfNotPresent
+  networkPolicies: false
+  rbac:
+    create: false
+  serviceAccount:
+    create: false
+  objstore:
+    createSecret: true
+    secretName: thanos-objstore
+    secretKey: objstore.yml
+    config: |
+      type: S3
+      config:
+        bucket: thanos
+        endpoint: s3.service.jort.haus:8443
+        region: us-east-1
+        aws_sdk_auth: true
+        bucket_lookup_type: path
+  thanosRules:
+    enabled: false
+
+bucket:
+  enabled: true
+  bucketweb:
+    enabled: false
+
+compactor:
+  enabled: true
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: seaweedfs-storage
+  retention:
+    resolutionRaw: 90d
+    resolution5m: 90d
+    resolution1h: 90d
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  serviceAccount:
+    create: true
+    name: thanos-compactor
+    automountServiceAccountToken: false
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: thanos-objstore-credentials
+          key: access_key_id
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: thanos-objstore-credentials
+          key: secret_access_key
+  extraVolumes:
+    - name: thanos-objstore-csi
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: thanos-objstore
+  extraVolumeMounts:
+    - name: thanos-objstore-csi
+      mountPath: /mnt/secrets-store
+      readOnly: true
+
+query:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    httpPort: 9090
+    grpcPort: 10901
+  endpoints:
+    autogen:
+      enabled: false
+    static:
+      - gaia-01:10901
+      - gaia-02:10901
+      - thanos-storegateway:10901
+  replicaLabels:
+    - replica
+  extraArgs:
+    - --query.auto-downsampling
+    - --log.level=info
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: thanos
+          app.kubernetes.io/instance: thanos
+          app.kubernetes.io/component: query
+  pdb:
+    enabled: true
+    minAvailable: 1
+  serviceAccount:
+    create: true
+    automountServiceAccountToken: false
+
+receive:
+  enabled: false
+
+storegateway:
+  enabled: true
+  replicaCount: 2
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: seaweedfs-storage
+  serviceAccount:
+    create: true
+    name: thanos-storegateway
+    automountServiceAccountToken: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: thanos
+          app.kubernetes.io/instance: thanos
+          app.kubernetes.io/component: storegateway
+  pdb:
+    enabled: true
+    minAvailable: 1
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: thanos-objstore-credentials
+          key: access_key_id
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: thanos-objstore-credentials
+          key: secret_access_key
+  extraVolumes:
+    - name: thanos-objstore-csi
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: thanos-objstore
+  extraVolumeMounts:
+    - name: thanos-objstore-csi
+      mountPath: /mnt/secrets-store
+      readOnly: true
+
+ruler:
+  enabled: false

@@ -10,6 +10,7 @@ _:
     ./seaweedfs
     ./victorialogs.nix
     ./fluent-bit.nix
+    ./prometheus
     ./xfs-quotas.nix
   ];
 }

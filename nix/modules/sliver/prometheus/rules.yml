@@ -1,0 +1,37 @@
+groups:
+  - name: node-health
+    rules:
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node exporter on {{ $labels.host }} is unreachable"
+          description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 10 minutes."
+      - alert: NodeFilesystemSpaceLow
+        expr: 100 * node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Filesystem space is low on {{ $labels.host }}"
+          description: "{{ $labels.mountpoint }} has less than 10% available space."
+      - alert: NodeMemoryAvailableLow
+        expr: 100 * node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Available memory is low on {{ $labels.host }}"
+          description: "Less than 10% of memory is available on {{ $labels.instance }}."
+  - name: monitoring-health
+    rules:
+      - alert: MonitoringTargetDown
+        expr: up{job=~"prometheus|alertmanager|victorialogs|thanos-sidecar"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} target {{ $labels.host }} is unreachable"
+          description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 10 minutes."

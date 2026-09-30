@@ -52,8 +52,6 @@ in
         where = statePath;
         type = "none";
         options = "bind";
-        requires = [ "xfs_quota-victorialogs.service" ];
-        after = [ "xfs_quota-victorialogs.service" ];
         before = [ "victorialogs.service" ];
       }
     ];
