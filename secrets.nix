@@ -76,4 +76,10 @@ in
   "secrets/k3s-approle-role-id.age".publicKeys = k3s-hosts;
   "secrets/k3s-approle-secret-id.age".publicKeys = k3s-hosts;
   "secrets/k3s-datastore-password.age".publicKeys = k3s-datastore-hosts;
+  "secrets/seaweedfs-postgres-password.age".publicKeys = postgres-hosts;
+
+  "secrets/prometheus-kubelet-ca.age".publicKeys = [ matt gaia-01 gaia-02 ];
+  "secrets/prometheus-kubelet-token.age".publicKeys = [ matt gaia-01 gaia-02 ];
+  "secrets/prometheus-control-plane-token.age".publicKeys = [ matt gaia-01 gaia-02 ];
+  "secrets/prometheus-app-metrics-token.age".publicKeys = [ matt gaia-01 gaia-02 ];
 }

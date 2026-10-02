@@ -90,6 +90,35 @@ secret-random name bytes='32':
 create-k3s-datastore-secret:
   scripts/create-k3s-datastore-secret
 
+# Create the encrypted static SeaweedFS PostgreSQL password.
+[group('secret')]
+create-seaweedfs-postgres-secret:
+  scripts/create-seaweedfs-postgres-secret
+
+# Apply the declarative PostgreSQL roles and grants through the host oneshot.
+[group('postgres')]
+postgres-ensure:
+  ssh matt@gaia-01.node.jort.haus sudo systemctl start jorthaus-postgres-ensure.service
+
+# Encrypt the public K3s server CA for the host-native Prometheus pair.
+[group('secret')]
+create-prometheus-kubelet-ca:
+  scripts/create-prometheus-kubelet-ca
+
+# Issue a one-year TokenRequest token for host-native kubelet scraping.
+[group('secret')]
+create-prometheus-kubelet-token mode='create':
+  scripts/create-prometheus-kubelet-token '{{mode}}'
+
+# Issue one-year TokenRequest tokens for Kubernetes metrics scraping.
+[group('secret')]
+create-prometheus-control-plane-token mode='create':
+  scripts/create-prometheus-control-plane-token '{{mode}}'
+
+[group('secret')]
+create-prometheus-app-metrics-token mode='create':
+  scripts/create-prometheus-app-metrics-token '{{mode}}'
+
 # generate & encrypt new openbao unsealing key
 [group('secret')]
 openbao-key name:

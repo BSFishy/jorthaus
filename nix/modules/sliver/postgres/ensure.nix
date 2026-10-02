@@ -244,11 +244,13 @@ in
           wantedBy = [ "multi-user.target" ];
           after = [
             "network-online.target"
+            "agenix.service"
             "patroni.service"
             "haproxy.service"
           ];
           wants = [
             "network-online.target"
+            "agenix.service"
             "patroni.service"
             "haproxy.service"
           ];

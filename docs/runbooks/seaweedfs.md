@@ -9,7 +9,7 @@ Before changing SeaweedFS state, verify that:
 
 - `seaweedfs-master`, `seaweedfs-filer`, and `seaweedfs-volume` are active on
   the intended nodes
-- OpenBao is healthy so filer credentials and JWT material can render
+- OpenBao is healthy so S3 identities and JWT material can render
 - the anycast endpoints respond
 - the data disk mounted at `/srv/storage` is present on each dataplane node
 
@@ -185,18 +185,35 @@ sudo bash -lc 'printf "lock\nvolume.fix.replication -doDelete=false\nunlock\n" |
 
 ## Credential and certificate rotation
 
-SeaweedFS runtime material is rendered on each node at:
+Runtime material is available on each controlplane node at:
 
-- `/run/seaweedfs-agent-filer/postgres.env`
+- `/run/agenix/seaweedfs-postgres-password` (agenix-managed; do not print or
+  copy its contents)
 - `/run/seaweedfs-agent-filer/s3.json`
 - `/run/seaweedfs-pki/jwt.env`
 - `/run/seaweedfs-pki/{cert.pem,key.pem,ca.pem}`
 
+The filer reads its PostgreSQL password from agenix when its service starts and
+connects as `seaweedfs_static`. The role inherits the `seaweedfs` owner role.
+This credential has no automatic rotation. `jorthaus-postgres-ensure.service`
+on Gaia-01 applies its value; use `just postgres-ensure` rather than an ad-hoc
+SQL command. OpenBao no longer supplies the SeaweedFS PostgreSQL credential,
+but the SeaweedFS agent remains necessary for S3 identities and security
+material.
+
+Rotate the PostgreSQL credential with a parallel login role, not by overwriting
+the current password in place. Apply the new role/password first, then migrate
+filers one at a time and verify each filer and S3 endpoint plus PostgreSQL
+sessions before retiring the old login. Confirm the other filer nodes remain
+healthy before each host switch. Do not restart SeaweedFS CSI workloads as part
+of this operation; if a CSI workload restart is required, first quiesce all
+writers as described in the CSI maintenance section.
+
 Behavior:
 
-- OpenBao agent refresh updates filer database credentials and S3 identities
+- OpenBao agent refresh updates S3 identities
 - `jorthaus-seaweedfs-credential-refresh.service` restarts `seaweedfs-filer`
-  after filer credential changes
+  after the S3 configuration path changes
 - `jorthaus-seaweedfs-security-refresh.service` restarts SeaweedFS services
   after JWT changes
 - `jorthaus-seaweedfs-pki-renew.timer` renews internal TLS materials

@@ -6,7 +6,7 @@ description: Centralized Patroni/Postgres role and database ensure configuration
 
 `jorthaus.postgres.ensure` is the declarative source for cluster-scoped
 PostgreSQL roles, databases, ownership, and grants that must exist before
-services use OpenBao-managed credentials.
+services connect.
 
 The module lives in:
 
@@ -99,11 +99,18 @@ nix/modules/sliver/seaweedfs/controlplane.nix
 
 Ensures:
 
-- role `seaweedfs` with `LOGIN`
+- role `seaweedfs` with `NOLOGIN` as the database and schema owner
+- role `seaweedfs_static` with `LOGIN` and membership in `seaweedfs`
+- `seaweedfs_static` password from the agenix-encrypted secret
+  `seaweedfs-postgres-password`
 - database `seaweedfs` owned by `seaweedfs`
 - schema `public` owned by `seaweedfs`
 - existing table/sequence privileges for `seaweedfs`
 - future table/sequence default privileges for `seaweedfs`
+
+SeaweedFS filers connect with `seaweedfs_static`; OpenBao no longer supplies or
+rotates this PostgreSQL credential. Rotation is an intentional parallel-role
+migration, not an in-place password update.
 
 ### Authentik
 
@@ -238,7 +245,7 @@ EOF
 Check OpenBao-issued static credentials without printing passwords:
 
 ```bash
-for path in postgres/static-creds/k3s postgres/static-creds/seaweedfs postgres/static-creds/postgres-backup; do
+for path in postgres/static-creds/k3s postgres/static-creds/postgres-backup; do
   echo "--- $path"
   bao read -format=json "$path" \
     | jq -r '.data | {username, password_present:(.password != null and (.password|length > 0)), ttl}'

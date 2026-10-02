@@ -27,6 +27,9 @@ let
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
   );
+  prometheusHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (peer: peer.slivers.prometheus.enable) (builtins.attrValues hostInventory)
+  );
   bootstrapHost = if controlplaneHosts == [ ] then null else lib.head controlplaneHosts;
   postgresBootstrapHost = if postgresHosts == [ ] then null else lib.head postgresHosts;
   controlplaneEnabled = enabled && role == "controlplane";
@@ -37,6 +40,12 @@ let
     if bootstrapHost == null then null else "${bootstrapHost.hostname}.node.jort.haus";
   apiPort = 6443;
   ciliumGenevePort = 6081;
+  prometheusScrapePorts = [
+    10250
+    9962
+    9963
+    9964
+  ];
   rebootSentinelFile = "/var/run/reboot-required";
   roleIdSecretName = "k3s-approle-role-id";
   secretIdSecretName = "k3s-approle-secret-id";
@@ -398,6 +407,15 @@ in
     ];
 
     networking.firewall.allowedTCPPorts = lib.mkIf controlplaneEnabled [ cfg.api.port ];
+    networking.firewall.extraCommands = lib.mkIf enabled (
+      lib.concatMapStringsSep "\n" (
+        peer:
+        lib.concatMapStringsSep "\n" (
+          port:
+          "iptables -A nixos-fw -p tcp -s ${peer.ipam.ipv4.address}/32 -m tcp --dport ${toString port} -j nixos-fw-accept"
+        ) prometheusScrapePorts
+      ) prometheusHosts
+    );
     networking.firewall.allowedUDPPorts = lib.mkIf enabled [ ciliumGenevePort ];
     networking.firewall.checkReversePath = lib.mkIf enabled false;
 

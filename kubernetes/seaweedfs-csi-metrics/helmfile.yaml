@@ -1,0 +1,5 @@
+releases:
+  - name: seaweedfs-csi-metrics
+    namespace: kube-system
+    createNamespace: false
+    chart: ./config-chart

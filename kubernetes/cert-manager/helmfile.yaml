@@ -11,6 +11,14 @@ releases:
     values:
       - crds:
           enabled: true
+        serviceLabels:
+          prometheus.jort.haus/scrape: "true"
+        cainjector:
+          serviceLabels:
+            prometheus.jort.haus/scrape: "true"
+        webhook:
+          serviceLabels:
+            prometheus.jort.haus/scrape: "true"
 
   - name: cert-manager-config
     namespace: cert-manager

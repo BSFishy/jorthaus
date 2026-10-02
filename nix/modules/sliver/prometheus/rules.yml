@@ -28,10 +28,28 @@ groups:
   - name: monitoring-health
     rules:
       - alert: MonitoringTargetDown
-        expr: up{job=~"prometheus|alertmanager|victorialogs|thanos-sidecar"} == 0
+        expr: up{job=~"prometheus|alertmanager|victorialogs|thanos-sidecar|thanos-query|thanos-storegateway|thanos-compactor|kube-state-metrics|kubelet|kubelet-cadvisor|kubernetes-control-plane|coredns|kured|secrets-store-csi|traefik|cert-manager|authentik-server|authentik-worker|seaweedfs-csi|cilium-agent|cilium-operator|cilium-envoy"} == 0
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "{{ $labels.job }} target {{ $labels.host }} is unreachable"
+          summary: "{{ $labels.job }} target {{ $labels.instance }} is unreachable"
           description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 10 minutes."
+  - name: kubernetes-object-health
+    rules:
+      - alert: KubernetesDeploymentReplicasUnavailable
+        expr: kube_deployment_status_replicas_unavailable > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has unavailable replicas"
+          description: "The deployment has had unavailable replicas for more than 10 minutes."
+      - alert: KubernetesPersistentVolumeClaimPending
+        expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is pending"
+          description: "The claim has remained pending for more than 10 minutes."

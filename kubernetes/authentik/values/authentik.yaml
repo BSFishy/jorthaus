@@ -48,6 +48,13 @@ server:
     enabled: false
   service:
     type: ClusterIP
+  metrics:
+    enabled: true
+    service:
+      type: ClusterIP
+      clusterIP: "None"
+      labels:
+        prometheus.jort.haus/scrape: "true"
   resources:
     requests:
       cpu: 100m
@@ -58,6 +65,13 @@ server:
 worker:
   replicas: 2
   serviceAccountName: authentik-csi
+  metrics:
+    enabled: true
+    service:
+      type: ClusterIP
+      clusterIP: "None"
+      labels:
+        prometheus.jort.haus/scrape: "true"
   resources:
     requests:
       cpu: 100m

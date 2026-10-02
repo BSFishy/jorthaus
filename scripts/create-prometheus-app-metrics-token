@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must point to a private runtime directory}"
+if [[ ! -d $XDG_RUNTIME_DIR || ! -O $XDG_RUNTIME_DIR || ! -w $XDG_RUNTIME_DIR ]]; then
+  echo "XDG_RUNTIME_DIR is not a private writable directory" >&2
+  exit 1
+fi
+if [[ $(stat -f -c '%T' "$XDG_RUNTIME_DIR") != tmpfs ]]; then
+  echo "XDG_RUNTIME_DIR must be backed by tmpfs" >&2
+  exit 1
+fi
+export TMPDIR=$XDG_RUNTIME_DIR
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+secret=secrets/prometheus-app-metrics-token.age
+identity=${HOME:?HOME is not set}/.ssh/id_ed25519
+mode=${1:-create}
+
+if [[ $mode != create && $mode != rotate ]]; then
+  echo "Usage: $0 [create|rotate]" >&2
+  exit 2
+fi
+if [[ $mode == create && -e $secret ]]; then
+  echo "Refusing to overwrite existing token: $secret (use 'rotate' deliberately)" >&2
+  exit 1
+fi
+if [[ $mode == rotate && ! -e $secret ]]; then
+  echo "Cannot rotate missing token: $secret" >&2
+  exit 1
+fi
+if [[ ! -r $identity ]]; then
+  echo "Cannot read agenix identity: $identity" >&2
+  exit 1
+fi
+
+backup=$TMPDIR/prometheus-app-metrics-token.previous.age
+if [[ -e $secret ]]; then
+  cp -- "$secret" "$backup"
+fi
+created=1
+cleanup() {
+  status=$?
+  trap - EXIT
+  if (( status != 0 && created )); then
+    if [[ -e $backup ]]; then
+      cp -- "$backup" "$secret"
+    else
+      rm -f -- "$secret"
+    fi
+  fi
+  rm -f -- "$backup"
+  unset token claims payload encoded decrypted
+  exit "$status"
+}
+trap cleanup EXIT
+
+base64url_decode() {
+  local value=$1
+  value=${value//-/+}
+  value=${value//_/\/}
+  case $((${#value} % 4)) in
+    0) ;;
+    2) value+="==" ;;
+    3) value+="=" ;;
+    *) return 1 ;;
+  esac
+  printf '%s' "$value" | base64 --decode
+}
+
+token=$(kubectl -n monitoring create token prometheus-app-metrics --duration=8760h)
+IFS=. read -r _ payload _ <<< "$token"
+claims=$(base64url_decode "$payload")
+subject=$(jq -er '.sub' <<< "$claims")
+issued=$(jq -er '.iat' <<< "$claims")
+expires=$(jq -er '.exp' <<< "$claims")
+if [[ $subject != system:serviceaccount:monitoring:prometheus-app-metrics ]]; then
+  echo "Issued token has an unexpected subject" >&2
+  exit 1
+fi
+lifetime=$((expires - issued))
+if (( lifetime < 31500000 || lifetime > 31540000 )); then
+  echo "Issued token lifetime is outside the expected one-year range" >&2
+  exit 1
+fi
+
+printf '%s' "$token" | agenix -e "$secret" -i "$identity"
+test -s "$secret"
+decrypted=$(agenix -d "$secret" -i "$identity")
+if [[ $decrypted != "$token" ]]; then
+  echo "Encrypted token validation failed" >&2
+  exit 1
+fi
+unset token claims payload encoded decrypted
+created=0
+expiry=$(date -u -d "@$expires" '+%Y-%m-%dT%H:%M:%SZ')
+printf 'Created encrypted Prometheus application-metrics token; expires %s\n' "$expiry"

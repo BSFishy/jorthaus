@@ -1,0 +1,5 @@
+releases:
+  - name: control-plane-metrics-config
+    namespace: monitoring
+    createNamespace: true
+    chart: ./config-chart

@@ -1,0 +1,43 @@
+prometheusScrape: false
+replicas: 2
+
+service:
+  type: ClusterIP
+  clusterIP: 10.43.200.50
+  port: 8080
+
+serviceAccount:
+  create: true
+  automountServiceAccountToken: true
+
+rbac:
+  create: true
+  useClusterRole: true
+
+collectorsExclude:
+  - configmaps
+  - secrets
+
+metricLabelsAllowlist: []
+metricAnnotationsAllowList: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    minDomains: 2
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: kube-state-metrics
+        app.kubernetes.io/instance: kube-state-metrics
+
+podDisruptionBudget:
+  minAvailable: 1

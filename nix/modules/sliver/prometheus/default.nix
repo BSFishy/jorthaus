@@ -19,6 +19,14 @@ let
   victorialogsHosts = lib.filter (peer: peer.slivers.victorialogs.enable) (
     builtins.attrValues hostInventory
   );
+  kubeletHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (peer: peer.slivers.k3s.enable) (builtins.attrValues hostInventory)
+  );
+  controlPlaneHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (
+      peer: peer.slivers.k3s.enable && peer.slivers.k3s.role == "controlplane"
+    ) (builtins.attrValues hostInventory)
+  );
   isPrometheus = host.slivers.prometheus.enable;
   isAlertmanager = host.slivers.alertmanager.enable;
   projectDisks = lib.filter (disk: disk.projects ? prometheus) host.install.dataDisks;
@@ -32,6 +40,169 @@ let
   alertmanagerTarget = peer: "${peer.ipam.ipv4.address}:9093";
   prometheusTarget = peer: "${peer.ipam.ipv4.address}:9090";
   victorialogsTarget = peer: "${peer.ipam.ipv4.address}:9428";
+  kubeStateMetricsTarget = "10.43.200.50:8080";
+  kubeletTarget = peer: "${peer.ipam.ipv4.address}:10250";
+  appMetricsTokenFile = config.age.secrets."prometheus-app-metrics-token".path;
+  appMetricsKubeconfigFile = pkgs.writeText "prometheus-app-metrics.kubeconfig" ''
+    apiVersion: v1
+    kind: Config
+    clusters:
+      - cluster:
+          certificate-authority: ${kubeletCaFile}
+          server: https://k8s.service.jort.haus:6443
+        name: jorthaus
+    contexts:
+      - context:
+          cluster: jorthaus
+          user: prometheus-app-metrics
+        name: jorthaus
+    current-context: jorthaus
+    users:
+      - name: prometheus-app-metrics
+        user:
+          tokenFile: ${appMetricsTokenFile}
+  '';
+  appMetricsDiscovery = namespace: {
+    role = "endpoints";
+    kubeconfig_file = "${appMetricsKubeconfigFile}";
+    namespaces.names = [ namespace ];
+  };
+  appMetricsRelabelConfigs =
+    { serviceName, portName, requireOptIn ? true }:
+    [
+      {
+        source_labels = [ "__meta_kubernetes_endpoint_ready" ];
+        regex = "true";
+        action = "keep";
+      }
+      {
+        source_labels = [ "__meta_kubernetes_service_name" ];
+        regex = serviceName;
+        action = "keep";
+      }
+      {
+        source_labels = [ "__meta_kubernetes_endpoint_port_name" ];
+        regex = portName;
+        action = "keep";
+      }
+      {
+        source_labels = [ "__meta_kubernetes_pod_node_name" ];
+        target_label = "host";
+      }
+      {
+        source_labels = [ "__meta_kubernetes_namespace" ];
+        target_label = "namespace";
+      }
+    ]
+    ++ lib.optionals requireOptIn [
+      {
+        source_labels = [ "__meta_kubernetes_service_label_prometheus_jort_haus_scrape" ];
+        regex = "true";
+        action = "keep";
+      }
+    ];
+  applicationMetricRuntimeAllowlist =
+    "process_cpu_seconds_total|process_resident_memory_bytes|process_start_time_seconds|go_goroutines|go_gc_duration_seconds(_.*)?|go_memstats_.*";
+  traefikMetricAllowlist = "^(traefik_.*|${applicationMetricRuntimeAllowlist})$";
+  certManagerMetricAllowlist = "^(certmanager_.*|controller_runtime_.*|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
+  authentikServerMetricAllowlist =
+    "^(authentik_(admin_workers|outposts_connected|outposts_last_update|tasks_queued|tasks_workers|flows_cached|flows_plan_time_(bucket|count|sum)|flows_stage_time_(bucket|count|sum)|flows_execution_stage_time_(bucket|count|sum)|policies_cached|policies_execution_time_(bucket|count|sum)|policies_engine_time_total_seconds_(bucket|count|sum)|property_mapping_execution_time_(bucket|count|sum)|main_request_duration_seconds(_count|_sum)?)|django_http_(requests_latency_seconds_by_view_method_(bucket|count|sum)|requests_latency_including_middlewares_seconds_(bucket|count|sum)|requests_total_by_view_transport_method_total|responses_total_by_status_view_method_total|responses_total_by_status_total)|django_db_(query_duration_seconds_(bucket|count|sum)|execute_total|new_connections_total|new_connection_errors_total)|${applicationMetricRuntimeAllowlist})$";
+  authentikWorkerMetricAllowlist =
+    "^(authentik_(admin_workers|tasks_(queued|in_progress|total|errors_total|retries_total|workers|duration_milliseconds_(bucket|count|sum))|policies_cached|policies_execution_time_(bucket|count|sum)|policies_engine_time_total_seconds_(bucket|count|sum))|django_db_(query_duration_seconds_(bucket|count|sum)|execute_total|execute_many_total|new_connections_total|new_connection_errors_total)|${applicationMetricRuntimeAllowlist})$";
+  seaweedCsiMetricAllowlist =
+    "^(csi_sidecar_operations_seconds_(bucket|count|sum)|workqueue_.*|process_start_time_seconds|${applicationMetricRuntimeAllowlist})$";
+  ciliumEnvoyMetricAllowlist = "^(envoy_.*|${applicationMetricRuntimeAllowlist})$";
+  ciliumOperatorMetricAllowlist = "^(cilium_.*|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
+  ciliumAgentMetricAllowlist = "^(cilium_.*|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
+  corednsMetricAllowlist = "^(coredns_.*|${applicationMetricRuntimeAllowlist})$";
+  kuredMetricAllowlist = "^(kured_.*|promhttp_.*|${applicationMetricRuntimeAllowlist})$";
+  secretsStoreMetricAllowlist =
+    "^(certwatcher_.*|controller_runtime_.*|node_(publish|unpublish)_.*|rotation_reconcile_.*|rest_client_requests_total|target_info|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
+  thanosMetricAllowlist = "^(thanos_.*|prometheus_.*|grpc_.*|http_.*|promhttp_.*|${applicationMetricRuntimeAllowlist})$";
+  controlPlaneMetricAllowlist =
+    "^("
+    + lib.concatStringsSep "|" [
+      "apiserver_request_total"
+      "apiserver_request_duration_seconds_(count|sum)"
+      "apiserver_request_sli_duration_seconds_(count|sum)"
+      "apiserver_current_inflight_requests"
+      "apiserver_current_inqueue_requests"
+      "apiserver_longrunning_requests"
+      "apiserver_storage_objects"
+      "apiserver_storage_size_bytes"
+      "apiserver_storage_data_key_generation_failures_total"
+      "apiserver_tls_handshake_errors_total"
+      "apiserver_audit_requests_rejected_total"
+      "apiserver_flowcontrol_request_dispatch_no_accommodation_total"
+      "scheduler_pending_pods"
+      "scheduler_unschedulable_pods"
+      "scheduler_schedule_attempts_total"
+      "scheduler_queue_incoming_pods_total"
+      "scheduler_scheduling_attempt_duration_seconds_(count|sum)"
+      "scheduler_scheduling_algorithm_duration_seconds_(count|sum)"
+      "scheduler_framework_extension_point_duration_seconds_(count|sum)"
+      "workqueue_depth"
+      "workqueue_retries_total"
+      "workqueue_unfinished_work_seconds"
+      "node_collector_update_all_nodes_health_duration_seconds_(count|sum)"
+      "node_collector_update_node_health_duration_seconds_(count|sum)"
+      "node_controller_cloud_provider_taint_removal_delay_seconds_(count|sum)"
+      "node_controller_initial_node_sync_delay_seconds_(count|sum)"
+      "kine_sql_time_seconds_(count|sum)"
+      "kine_sql_total"
+      "kine_insert_errors_total"
+      "k3s_certificate_expiration_seconds"
+      "process_cpu_seconds_total"
+      "process_resident_memory_bytes"
+    ]
+    + ")$";
+  kubeletMetricAllowlist =
+    "^("
+    + lib.concatStringsSep "|" [
+      "kubelet_active_pods"
+      "kubelet_running_containers"
+      "kubelet_running_pods"
+      "kubelet_working_pods"
+      "kubelet_runtime_operations_total"
+      "kubelet_runtime_operations_errors_total"
+      "kubelet_runtime_operations_duration_seconds_(bucket|count|sum)"
+      "kubelet_pleg_relist_duration_seconds_(bucket|count|sum)"
+      "kubelet_pod_start_sli_duration_seconds_(bucket|count|sum)"
+      "kubelet_container_log_filesystem_used_bytes"
+      "volume_manager_total_volumes"
+      "k3s_certificate_expiration_seconds"
+      "kubernetes_build_info"
+      "process_cpu_seconds_total"
+      "process_resident_memory_bytes"
+    ]
+    + ")$";
+  cadvisorMetricAllowlist =
+    "^("
+    + lib.concatStringsSep "|" [
+      "container_cpu_usage_seconds_total"
+      "container_cpu_cfs_throttled_periods_total"
+      "container_cpu_cfs_throttled_seconds_total"
+      "container_memory_working_set_bytes"
+      "container_memory_rss"
+      "container_memory_cache"
+      "container_oom_events_total"
+      "container_fs_usage_bytes"
+      "container_fs_reads_bytes_total"
+      "container_fs_writes_bytes_total"
+      "container_network_receive_bytes_total"
+      "container_network_transmit_bytes_total"
+      "container_network_receive_errors_total"
+      "container_network_transmit_errors_total"
+      "container_spec_memory_limit_bytes"
+      "container_spec_cpu_quota"
+      "container_spec_cpu_period"
+      "machine_cpu_cores"
+      "machine_memory_bytes"
+    ]
+    + ")$";
+  kubeletTokenFile = config.age.secrets."prometheus-kubelet-token".path;
+  controlPlaneTokenFile = config.age.secrets."prometheus-control-plane-token".path;
+  kubeletCaFile = config.age.secrets."prometheus-kubelet-ca".path;
   thanosRuntimeDir = "/run/thanos-sidecar";
   seaweedfsProvisionerHost =
     if config.jorthaus.seaweedfs.controlplaneHosts == [ ] then
@@ -83,6 +254,34 @@ in
         }
       ];
 
+      age.secrets.prometheus-kubelet-token = {
+        file = ../../../../secrets/prometheus-kubelet-token.age;
+        owner = "root";
+        group = "prometheus";
+        mode = "0440";
+      };
+
+      age.secrets.prometheus-kubelet-ca = {
+        file = ../../../../secrets/prometheus-kubelet-ca.age;
+        owner = "root";
+        group = "prometheus";
+        mode = "0440";
+      };
+
+      age.secrets.prometheus-control-plane-token = {
+        file = ../../../../secrets/prometheus-control-plane-token.age;
+        owner = "root";
+        group = "prometheus";
+        mode = "0440";
+      };
+
+      age.secrets.prometheus-app-metrics-token = {
+        file = ../../../../secrets/prometheus-app-metrics-token.age;
+        owner = "root";
+        group = "prometheus";
+        mode = "0440";
+      };
+
       jorthaus.xfsQuota.projects.prometheus = {
         id = 102;
         fileSystem = projectDisk.mountpoint;
@@ -113,6 +312,7 @@ in
 
       services.prometheus = {
         enable = true;
+        checkConfig = "syntax-only";
         listenAddress = host.ipam.ipv4.address;
         stateDir = "prometheus";
         retentionTime = "30d";
@@ -145,11 +345,305 @@ in
             }) prometheusHosts;
           }
           {
+            job_name = "kube-state-metrics";
+            static_configs = [
+              {
+                targets = [ kubeStateMetricsTarget ];
+              }
+            ];
+          }
+          {
+            job_name = "coredns";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "kube-system") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "kube-dns";
+              portName = "metrics";
+              requireOptIn = false;
+            };
+            sample_limit = 1000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = corednsMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "traefik";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "traefik") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "traefik-metrics";
+              portName = "metrics";
+            };
+            sample_limit = 1000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = traefikMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "cert-manager";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "cert-manager") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "cert-manager|cert-manager-cainjector|cert-manager-webhook";
+              portName = "http-metrics|metrics";
+            };
+            sample_limit = 1500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = certManagerMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "authentik-server";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "authentik") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "authentik-server-metrics";
+              portName = "metrics";
+            };
+            sample_limit = 2000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = authentikServerMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "authentik-worker";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "authentik") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "authentik-worker-metrics";
+              portName = "metrics";
+            };
+            sample_limit = 1000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = authentikWorkerMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "seaweedfs-csi";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "kube-system") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "seaweedfs-csi-metrics";
+              portName = "(provisioner|resizer|attacher)-metrics";
+            };
+            sample_limit = 1000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = seaweedCsiMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "kured";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "kube-system") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "kured-metrics";
+              portName = "metrics";
+            };
+            sample_limit = 1000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = kuredMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "secrets-store-csi";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "kube-system") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "secrets-store-csi-driver-metrics";
+              portName = "metrics";
+            };
+            sample_limit = 1000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = secretsStoreMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "cilium-agent";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "kube-system") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "cilium-agent";
+              portName = "metrics";
+              requireOptIn = false;
+            };
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = ciliumAgentMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "cilium-operator";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "kube-system") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "cilium-operator";
+              portName = "metrics";
+              requireOptIn = false;
+            };
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = ciliumOperatorMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "cilium-envoy";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "kube-system") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "cilium-envoy";
+              portName = "envoy-metrics";
+              requireOptIn = false;
+            };
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = ciliumEnvoyMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "kubernetes-control-plane";
+            scheme = "https";
+            bearer_token_file = controlPlaneTokenFile;
+            tls_config.ca_file = kubeletCaFile;
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = controlPlaneMetricAllowlist;
+                action = "keep";
+              }
+            ];
+            static_configs = map (peer: {
+              targets = [ "${peer.hostname}.node.jort.haus:6443" ];
+              labels.host = peer.hostname;
+            }) controlPlaneHosts;
+          }
+          {
+            job_name = "kubelet";
+            scheme = "https";
+            bearer_token_file = kubeletTokenFile;
+            tls_config.ca_file = kubeletCaFile;
+            sample_limit = 2000;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = kubeletMetricAllowlist;
+                action = "keep";
+              }
+            ];
+            static_configs = map (peer: {
+              targets = [ (kubeletTarget peer) ];
+              labels.host = peer.hostname;
+            }) kubeletHosts;
+          }
+          {
+            job_name = "kubelet-cadvisor";
+            scheme = "https";
+            metrics_path = "/metrics/cadvisor";
+            bearer_token_file = kubeletTokenFile;
+            tls_config.ca_file = kubeletCaFile;
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = cadvisorMetricAllowlist;
+                action = "keep";
+              }
+            ];
+            static_configs = map (peer: {
+              targets = [ (kubeletTarget peer) ];
+              labels.host = peer.hostname;
+            }) kubeletHosts;
+          }
+          {
             job_name = "thanos-sidecar";
             static_configs = [
               {
                 targets = [ "127.0.0.1:10902" ];
                 labels.host = host.hostname;
+              }
+            ];
+          }
+          {
+            job_name = "thanos-query";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "thanos") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "thanos-query";
+              portName = "http";
+              requireOptIn = false;
+            };
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = thanosMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "thanos-storegateway";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "thanos") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "thanos-storegateway";
+              portName = "http";
+              requireOptIn = false;
+            };
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = thanosMetricAllowlist;
+                action = "keep";
+              }
+            ];
+          }
+          {
+            job_name = "thanos-compactor";
+            kubernetes_sd_configs = [ (appMetricsDiscovery "thanos") ];
+            relabel_configs = appMetricsRelabelConfigs {
+              serviceName = "thanos-compactor";
+              portName = "http";
+              requireOptIn = false;
+            };
+            sample_limit = 2500;
+            metric_relabel_configs = [
+              {
+                source_labels = [ "__name__" ];
+                regex = thanosMetricAllowlist;
+                action = "keep";
               }
             ];
           }
@@ -325,6 +819,11 @@ in
           "var-lib-prometheus.mount"
         ];
         unitConfig.RequiresMountsFor = [ dataPath ];
+        preStart = ''
+          test -r ${lib.escapeShellArg kubeletTokenFile}
+          test -r ${lib.escapeShellArg controlPlaneTokenFile}
+          test -r ${lib.escapeShellArg kubeletCaFile}
+        '';
         serviceConfig = {
           DynamicUser = lib.mkForce false;
           User = "prometheus";

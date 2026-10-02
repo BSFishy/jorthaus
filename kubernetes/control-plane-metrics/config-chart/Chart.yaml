@@ -1,0 +1,5 @@
+apiVersion: v2
+name: control-plane-metrics-config
+description: Least-privilege identity for host-native Kubernetes control-plane metrics scraping
+type: application
+version: 0.1.0

@@ -25,6 +25,10 @@ ipv4NativeRoutingCIDR: 10.42.0.0/16
 kubeProxyReplacement: true
 kubeProxyReplacementHealthzBindAddr: 0.0.0.0:10256
 
+prometheus:
+  enabled: true
+  metricsService: true
+
 nodePort:
   directRoutingDevice: bond+
 
@@ -38,6 +42,12 @@ loadBalancer:
 
 operator:
   replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  prometheus:
+    metricsService: true
 
 routingMode: native
 tunnelProtocol: geneve

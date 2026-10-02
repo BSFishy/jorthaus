@@ -3,12 +3,17 @@ helmfiles:
   - path: volsync/helmfile.yaml
   - path: cilium-system/helmfile.yaml
   - path: openbao-csi/helmfile.yaml
+  - path: kube-state-metrics/helmfile.yaml
+  - path: kubelet-metrics/helmfile.yaml
+  - path: control-plane-metrics/helmfile.yaml
+  - path: workload-metrics/helmfile.yaml
   - path: multus/helmfile.yaml
   - path: whereabouts/helmfile.yaml
   - path: ssdp-relay/helmfile.yaml
   - path: generic-device-plugin/helmfile.yaml
   - path: home-assistant/helmfile.yaml
   - path: seaweedfs-csi/helmfile.yaml
+  - path: seaweedfs-csi-metrics/helmfile.yaml
   - path: kured/helmfile.yaml
   - path: traefik/helmfile.yaml
   - path: cert-manager/helmfile.yaml

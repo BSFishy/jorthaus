@@ -11,12 +11,14 @@ let
   secretIdSecretName = "seaweedfs-approle-secret-id";
   roleIdFile = config.age.secrets.${roleIdSecretName}.path;
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
+  postgresPasswordSecretName = "seaweedfs-postgres-password";
+  postgresPasswordFile = config.age.secrets.${postgresPasswordSecretName}.path;
   filerAgentDir = "/run/seaweedfs-agent-filer";
   filerRuntimeDir = "/run/seaweedfs-filer";
   filerConfigDir = "${filerRuntimeDir}/.seaweedfs";
   filerTomlPath = "${filerConfigDir}/filer.toml";
   filerSecurityTomlPath = "${filerConfigDir}/security.toml";
-  credsFile = "${filerAgentDir}/postgres.env";
+  legacyPostgresCredsFile = "${filerAgentDir}/postgres.env";
   s3ConfigFile = "${filerAgentDir}/s3.json";
   certName = "seaweedfs-${host.hostname}";
   nodeDnsName = "${host.hostname}.node.jort.haus";
@@ -51,16 +53,13 @@ let
   '';
   renderFilerToml = pkgs.writeShellScript "jorthaus-seaweedfs-render-filer-toml" ''
     set -eu
+    umask 077
 
-    for _ in $(seq 1 30); do
-      if [ -f ${credsFile} ]; then
-        break
-      fi
-      sleep 1
-    done
-
-    [ -f ${credsFile} ]
-    . ${credsFile}
+    password="$(tr -d '\r\n' < ${postgresPasswordFile})"
+    if ! [[ "$password" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "SeaweedFS PostgreSQL credential has an unexpected format" >&2
+      exit 1
+    fi
 
     install -d -o seaweedfs-filer -g seaweedfs -m 0750 ${cfg.filer.dir}
     install -d -o seaweedfs-filer -g seaweedfs -m 0750 ${filerRuntimeDir}
@@ -81,14 +80,14 @@ let
         PRIMARY KEY (dirhash, name)
       );
     """
-    hostname = "$PGHOST"
-    port = $PGPORT
-    username = "$PGUSER"
-    password = "$PGPASSWORD"
-    database = "$PGDATABASE"
+    hostname = "postgres.service.jort.haus"
+    port = 5432
+    username = "seaweedfs_static"
+    password = "$password"
+    database = "seaweedfs"
     schema = "public"
-    sslmode = "$PGSSLMODE"
-    sslrootcert = "$PGSSLROOTCERT"
+    sslmode = "verify-full"
+    sslrootcert = "system"
     enableUpsert = true
     upsertQuery = """
       INSERT INTO "%[1]s" (dirhash, name, directory, meta)
@@ -103,10 +102,19 @@ let
 
     chown seaweedfs-filer:seaweedfs ${filerTomlPath}
     chmod 0400 ${filerTomlPath}
+    unset password
+    rm -f ${legacyPostgresCredsFile}
   '';
 in
 {
   config = lib.mkIf (cfg.enable && cfg.controlplaneEnabled) {
+    age.secrets.${postgresPasswordSecretName} = {
+      file = ../../../../secrets/seaweedfs-postgres-password.age;
+      owner = "seaweedfs-filer";
+      group = "seaweedfs";
+      mode = "0400";
+    };
+
     users = {
       groups.seaweedfs = { };
 
@@ -231,21 +239,6 @@ in
 
         template = [
           {
-            destination = credsFile;
-            perms = 256;
-            contents = ''
-              PGHOST=postgres.service.jort.haus
-              PGPORT=5432
-              PGDATABASE=seaweedfs
-              PGSSLMODE=verify-full
-              PGSSLROOTCERT=system
-              {{- with secret "postgres/static-creds/seaweedfs" }}
-              PGUSER={{ .Data.username }}
-              PGPASSWORD={{ .Data.password }}
-              {{- end }}
-            '';
-          }
-          {
             destination = s3ConfigFile;
             perms = 256;
             contents = ''
@@ -309,6 +302,7 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [
         "network-online.target"
+        "agenix.service"
         "var-lib-acme.mount"
         "vault-agent-seaweedfs.service"
         "jorthaus-seaweedfs-pki-renew.service"
@@ -321,6 +315,7 @@ in
           ];
       wants = [
         "network-online.target"
+        "agenix.service"
         "var-lib-acme.mount"
         "vault-agent-seaweedfs.service"
         "jorthaus-seaweedfs-pki-renew.service"
@@ -337,6 +332,7 @@ in
           "/var/lib/acme"
         ];
         ConditionPathExists = [
+          postgresPasswordFile
           cfg.tls.certFile
           "${cfg.tls.dir}/jwt.env"
           "${certDir}/fullchain.pem"
@@ -391,7 +387,12 @@ in
     };
 
     jorthaus.postgres.ensure = {
-      users.seaweedfs.login = true;
+      users.seaweedfs.login = false;
+      users.seaweedfs_static = {
+        login = true;
+        passwordFile = postgresPasswordFile;
+        memberships = [ "seaweedfs" ];
+      };
 
       databases.seaweedfs = {
         owner = "seaweedfs";
@@ -434,14 +435,6 @@ in
       serviceConfig = {
         Type = "oneshot";
         ExecStart = restartHelper;
-      };
-    };
-
-    systemd.paths.jorthaus-seaweedfs-credential-refresh = {
-      wantedBy = [ "multi-user.target" ];
-      pathConfig = {
-        PathChanged = credsFile;
-        Unit = "jorthaus-seaweedfs-credential-refresh.service";
       };
     };
 

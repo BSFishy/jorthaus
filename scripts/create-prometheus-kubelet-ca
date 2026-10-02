@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must point to a private runtime directory}"
+if [[ ! -d $XDG_RUNTIME_DIR || ! -O $XDG_RUNTIME_DIR || ! -w $XDG_RUNTIME_DIR ]]; then
+  echo "XDG_RUNTIME_DIR is not a private writable directory" >&2
+  exit 1
+fi
+if [[ $(stat -f -c '%T' "$XDG_RUNTIME_DIR") != tmpfs ]]; then
+  echo "XDG_RUNTIME_DIR must be backed by tmpfs" >&2
+  exit 1
+fi
+export TMPDIR=$XDG_RUNTIME_DIR
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+secret=secrets/prometheus-kubelet-ca.age
+identity=${HOME:?HOME is not set}/.ssh/id_ed25519
+
+if [[ -e $secret ]]; then
+  echo "Refusing to overwrite existing CA bundle: $secret" >&2
+  exit 1
+fi
+if [[ ! -r $identity ]]; then
+  echo "Cannot read agenix identity: $identity" >&2
+  exit 1
+fi
+
+read_ca() {
+  local host=$1
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "matt@${host}.node.jort.haus" \
+    'sudo --non-interactive dd if=/var/lib/rancher/k3s/server/tls/server-ca.crt status=none'
+}
+
+fingerprint() {
+  openssl x509 -noout -fingerprint -sha256 | cut -d= -f2
+}
+
+ca_fingerprint=$(read_ca gaia-01 | fingerprint)
+peer_fingerprint=$(read_ca gaia-02 | fingerprint)
+if [[ -z $ca_fingerprint || $ca_fingerprint != "$peer_fingerprint" ]]; then
+  echo "Gaia-01 and Gaia-02 do not present the same K3s server CA" >&2
+  exit 1
+fi
+
+created=1
+cleanup() {
+  status=$?
+  trap - EXIT
+  if (( status != 0 && created )); then
+    rm -f -- "$secret"
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+
+read_ca gaia-01 | agenix -e "$secret" -i "$identity"
+test -s "$secret"
+encrypted_fingerprint=$(agenix -d "$secret" -i "$identity" | fingerprint)
+if [[ $encrypted_fingerprint != "$ca_fingerprint" ]]; then
+  echo "Encrypted K3s CA fingerprint does not match the live cluster CA" >&2
+  exit 1
+fi
+created=0
+printf 'Created encrypted Prometheus K3s CA bundle (SHA-256 %s)\n' "$ca_fingerprint"

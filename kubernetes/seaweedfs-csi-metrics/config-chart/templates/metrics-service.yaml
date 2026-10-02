@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-csi-metrics
+  namespace: kube-system
+  labels:
+    prometheus.jort.haus/scrape: "true"
+spec:
+  clusterIP: None
+  selector:
+    app: seaweedfs-csi-driver-controller
+  ports:
+    - name: provisioner-metrics
+      port: 9809
+      targetPort: 9809
+      protocol: TCP
+    - name: resizer-metrics
+      port: 9810
+      targetPort: 9810
+      protocol: TCP
+    - name: attacher-metrics
+      port: 9811
+      targetPort: 9811
+      protocol: TCP

@@ -98,10 +98,6 @@ resource "vault_policy" "seaweedfs" {
   name = "seaweedfs"
 
   policy = <<-EOT
-    path "postgres/static-creds/seaweedfs" {
-      capabilities = ["read"]
-    }
-
     path "seaweedfs/data/s3" {
       capabilities = ["read"]
     }
