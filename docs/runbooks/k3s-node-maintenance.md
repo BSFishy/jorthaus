@@ -17,7 +17,11 @@ restoring schedulability.
   restarting a control-plane node.
 - Check for active backups, maintenance, or workloads that cannot tolerate an
   eviction. `kubectl drain` respects PodDisruptionBudgets and normal pod
-  termination grace periods.
+  termination grace periods. Cordon and drain are the normal maintenance
+  procedure; do not scale down all PVC-backed writers or manually move pods as
+  a blanket precondition. Let controllers reschedule evicted pods, and apply
+  workload-specific preparation only when its runbook requires it or a
+  concrete drain blocker needs targeted handling.
 - Use the declared project runner from the repository root. Do not directly
   restart `k3s` with SSH or `systemctl`.
 
@@ -68,6 +72,9 @@ flush and close data before kubelet removes them. Minecraft has previously
 saved correctly through graceful termination; after maintenance, verify the
 server is Ready and inspect the affected world area before considering the
 operation complete. Do not force-delete stateful pods to make a drain succeed.
+A SeaweedFS CSI pod on the node does not by itself require quiescing all
+CSI-backed writers; use cordon and drain, and follow an application-specific
+runbook only when the workload or maintenance task calls for extra preparation.
 
 A successful node restart does not prove every application recovered. Review
 workload readiness and relevant application logs, especially for StatefulSets
