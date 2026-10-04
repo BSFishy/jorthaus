@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+set +x
+
+[[ $# == 0 ]] || { echo 'This canary uses the Thanos grant and accepts no arguments.' >&2; exit 2; }
+
+BAO=/run/current-system/sw/bin/bao
+TIMEOUT=/run/current-system/sw/bin/timeout
+TOKEN_FILE=/run/seaweedfs-agent-filer/openbao.token
+BAO_ADDR=https://openbao.service.jort.haus:8200
+BAO_CACERT=/etc/ssl/certs/ca-bundle.crt
+EXPECTED_ENDPOINT=https://s3.service.jort.haus:8443
+EXPECTED_VIP=10.1.11.15
+CANARY_HOST=${CANARY_HOST:-gaia-03}
+[[ $CANARY_HOST =~ ^gaia-0[1-3]$ ]] || {
+  echo 'Canary host must be gaia-01, gaia-02, or gaia-03.' >&2
+  exit 2
+}
+JQ=$(command -v jq)
+
+[[ -x $BAO && -x $TIMEOUT && -r $TOKEN_FILE && -s $TOKEN_FILE ]] || {
+  echo 'OpenBao CLI, timeout, or SeaweedFS agent token is unavailable.' >&2
+  exit 1
+}
+
+resolved_ip=$(getent ahostsv4 s3.service.jort.haus | awk 'NR == 1 { print $1 }')
+[[ $resolved_ip == "$EXPECTED_VIP" ]] || {
+  echo 'S3 service name did not resolve to the expected canary VIP.' >&2
+  exit 1
+}
+route=$(/run/current-system/sw/bin/ip route get "$EXPECTED_VIP")
+[[ $route == local\ "$EXPECTED_VIP"\ dev\ lo* ]] || {
+  echo 'S3 VIP is not locally routed on the canary host.' >&2
+  exit 1
+}
+
+WORK=$(mktemp -d /run/seaweedfs-filer/s3-object-canary.XXXXXX)
+chmod 0700 "$WORK"
+BINDING="$WORK/binding.json"
+CREDENTIALS="$WORK/aws-credentials"
+CONFIG="$WORK/aws-config"
+PAYLOAD="$WORK/payload"
+DOWNLOADED="$WORK/downloaded"
+OBJECT_KEY=
+PUT_ATTEMPTED=false
+
+cleanup() {
+  status=$?
+  trap - EXIT
+  if [[ $PUT_ATTEMPTED == true && -n $OBJECT_KEY ]]; then
+    if ! aws s3api delete-object --bucket thanos --key "$OBJECT_KEY" \
+      --endpoint-url "$EXPECTED_ENDPOINT" --region us-east-1 --no-cli-pager \
+      >/dev/null 2>&1; then
+      printf 'Canary cleanup failed; object may remain at thanos/%s.\n' "$OBJECT_KEY" >&2
+      status=1
+    fi
+  fi
+  rm -rf -- "$WORK"
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+BAO_TOKEN=$(<"$TOKEN_FILE")
+[[ -n $BAO_TOKEN ]] || { echo 'SeaweedFS agent token is empty.' >&2; exit 1; }
+BAO_ADDR="$BAO_ADDR" BAO_CACERT="$BAO_CACERT" BAO_TOKEN="$BAO_TOKEN" \
+  "$TIMEOUT" 45 "$BAO" kv get -format=json -mount=seaweedfs s3/bindings/thanos \
+  >"$BINDING" 2>"$WORK/openbao.err" || {
+    echo 'Could not read the Thanos S3 binding from OpenBao.' >&2
+    exit 1
+  }
+"$JQ" -e --arg endpoint "$EXPECTED_ENDPOINT" '
+  .data.data as $d
+  | $d.bucket == "thanos"
+    and $d.endpoint == $endpoint
+    and $d.region == "us-east-1"
+    and ($d.access_key_id | (type == "string" and test("^[A-Z0-9]{21}$")))
+    and ($d.secret_access_key | (type == "string" and test("^[A-Za-z0-9]{42}$")))
+' "$BINDING" >/dev/null 2>&1 || {
+  echo 'Thanos S3 binding metadata or credential format did not match expectations.' >&2
+  exit 1
+}
+
+"$JQ" -er '
+  .data.data as $d
+  | "[default]\naws_access_key_id=\($d.access_key_id)\naws_secret_access_key=\($d.secret_access_key)\n"
+' "$BINDING" >"$CREDENTIALS"
+chmod 0600 "$CREDENTIALS"
+region=$("$JQ" -er '.data.data.region' "$BINDING")
+printf '[default]\nregion = %s\ns3 =\n    addressing_style = path\n' "$region" >"$CONFIG"
+chmod 0600 "$CONFIG"
+export AWS_SHARED_CREDENTIALS_FILE="$CREDENTIALS"
+export AWS_CONFIG_FILE="$CONFIG"
+export AWS_EC2_METADATA_DISABLED=true
+export AWS_DEFAULT_REGION="$region"
+export AWS_PAGER=''
+
+# The S3 key is unique to this run and contains no credential material.
+run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
+OBJECT_KEY="jorthaus-pgbouncer-canary/$run_id.bin"
+head -c 1048576 /dev/urandom >"$PAYLOAD"
+size=$(wc -c <"$PAYLOAD")
+
+PUT_ATTEMPTED=true
+aws s3api put-object --bucket thanos --key "$OBJECT_KEY" --body "$PAYLOAD" \
+  --endpoint-url "$EXPECTED_ENDPOINT" --region "$region" \
+  --cli-connect-timeout 5 --cli-read-timeout 30 --no-cli-pager \
+  >/dev/null
+head_size=$(aws s3api head-object --bucket thanos --key "$OBJECT_KEY" \
+  --endpoint-url "$EXPECTED_ENDPOINT" --region "$region" \
+  --query ContentLength --output text --cli-connect-timeout 5 --cli-read-timeout 30 --no-cli-pager)
+[[ $head_size == "$size" ]] || { echo 'S3 HEAD returned an unexpected object size.' >&2; exit 1; }
+aws s3api get-object --bucket thanos --key "$OBJECT_KEY" "$DOWNLOADED" \
+  --endpoint-url "$EXPECTED_ENDPOINT" --region "$region" \
+  --cli-connect-timeout 5 --cli-read-timeout 30 --no-cli-pager \
+  >/dev/null
+cmp -s "$PAYLOAD" "$DOWNLOADED" || { echo 'S3 GET payload did not match the uploaded bytes.' >&2; exit 1; }
+aws s3api delete-object --bucket thanos --key "$OBJECT_KEY" \
+  --endpoint-url "$EXPECTED_ENDPOINT" --region "$region" \
+  --cli-connect-timeout 5 --cli-read-timeout 30 --no-cli-pager \
+  >/dev/null
+remaining=$(aws s3api list-objects-v2 --bucket thanos --prefix "$OBJECT_KEY" \
+  --endpoint-url "$EXPECTED_ENDPOINT" --region "$region" \
+  --query 'length(Contents || `[]`)' --output text \
+  --cli-connect-timeout 5 --cli-read-timeout 30 --no-cli-pager)
+[[ $remaining == 0 ]] || { echo 'S3 object remained after deletion.' >&2; exit 1; }
+PUT_ATTEMPTED=false
+
+printf 'S3 canary passed via the local %s VIP route: PUT, HEAD, GET, byte comparison, DELETE, and absence check; bytes=%s key=%s\n' \
+  "$CANARY_HOST" "$size" "$OBJECT_KEY"

@@ -359,31 +359,98 @@ and explicit approval.
 
 ### Grant credential rotation and recovery
 
-The provisioner is additive and never rotates an existing grant key. Do not
-edit a binding's credential fields manually or expect a normal retry to rotate
-them. Rotation is not yet an approved production procedure. Thanos Sidecars
-and the Kubernetes Store Gateway/Compactor now consume this binding, but
-version-pinned reads, consumer refresh/rollback, and a secret-safe key-generation
-and publication workflow have not been validated. On the pinned
-SeaweedFS release, `s3.accesskey.create` prints generated access and secret
-keys; do not invoke it interactively or allow its output into logs.
+The registry provisioner is additive and does not rotate an existing key. It
+verifies the key in the latest binding and preserves additional active keys.
+Use the staged operator helper instead of editing KV data or invoking
+`s3.accesskey.create` interactively. SeaweedFS 4.46 prints both generated key
+values from that command; the helper captures command output in a private `/run`
+directory, publishes the exact key pair as a KVv2 version, and verifies both
+sides without printing credentials.
 
-The intended sequence for a future reviewed rotation is to add a second key to
-the same IAM identity, publish a KVv2 version containing that exact key pair,
-refresh consumers, and verify the new key while the old one remains active.
-Only revoke the old key after consumer refresh and the rollback window have
-been verified.
+The helper is available through these `just` recipes:
 
-- Before revocation, if the new key or consumer refresh fails, keep both keys
-  active and return consumers to the last known-good credential bundle. If a
-  consumer reads only the latest version, publish the known-good bundle as a
-  new KVv2 version rather than deleting or rewriting history.
-- After revocation, the old key cannot be reactivated. Recovery requires a new
-  key pair, a new binding version, and another consumer rollout using a
-  reviewed secret-safe workflow.
-- Preserve prior KVv2 versions until rollback is no longer required. Validate
-  the actual provider's version-selection behavior before relying on pinned
-  reads or this rollback procedure.
+```bash
+just seaweedfs-s3-rotate status thanos
+just seaweedfs-s3-rotate history thanos
+just seaweedfs-s3-rotate stage thanos
+just seaweedfs-s3-rotate rollback thanos
+just seaweedfs-s3-rotate revoke thanos CONFIRM
+just seaweedfs-s3-canary
+just seaweedfs-s3-canary gaia-01
+```
+
+The canary accepts `gaia-01`, `gaia-02`, or `gaia-03`; it defaults to
+`gaia-03` and requires the selected host's S3 VIP to be locally routed.
+
+`status` reports only the KV version, active-key count, and whether the current
+binding key is active. `history` safely checks that the current and preceding
+KV versions still describe the same bucket, endpoint, and region. `stage`
+requires exactly one active key matching the current binding. It adds a second
+active key to the same IAM identity, writes a new KVv2 version, and verifies the
+read-back. OpenBao history is not an IAM
+revocation mechanism: both keys remain usable until `revoke` removes one from
+SeaweedFS. The staged rotation, consumer refresh, rollback after consumers
+adopted the candidate, candidate revocation, and post-revocation canary have
+been exercised for the Thanos grant on SeaweedFS 4.46.
+
+After staging:
+
+1. Run `just seaweedfs-s3-canary [gaia-host]` (default `gaia-03`). It reads the
+   current binding on the selected host and performs a TLS-verified 1 MiB PUT,
+   HEAD, GET, byte comparison, DELETE, and absence check through that host's
+   local `10.1.11.15` VIP route. The temporary object is removed on success; on
+   failure the helper attempts cleanup and reports the object key if deletion
+   also fails.
+2. Refresh each host Sidecar, one host at a time. Vault Agent renders the
+   binding every five minutes, but changing `credentials.env` does not restart
+   the Sidecar. Restart `vault-agent-thanos-sidecar.service`, wait for
+   `/run/thanos-sidecar/credentials.env`'s modification time to advance, then
+   restart `thanos-sidecar.service`. Verify the Sidecar is active and
+   `http://127.0.0.1:10902/-/ready` succeeds before moving to the other host.
+   Prometheus itself is not restarted.
+3. Wait for the Secrets Store CSI rotation (enabled with a five-minute poll) to
+   update `thanos-objstore-credentials`. Compare its metadata `resourceVersion`
+   with the value recorded before staging; inspect
+   `SecretProviderClassPodStatus` to ensure all three Thanos pods have mounted
+   both objects. Never display the Secret data.
+4. Restart the Store Gateway StatefulSet and wait for its two replicas to roll
+   ready one at a time. After confirming the singleton Compactor is idle, roll
+   it and wait for it to become ready. These workloads consume credentials from
+   environment variables, so CSI Secret updates alone do not change their
+   running processes.
+5. Verify the Store Gateway and Compactor synchronize block metadata without
+   S3 errors, and check Thanos Query's `/api/v1/stores` for both host Sidecars
+   and the Store Gateway with no `lastError`.
+
+Only after these checks pass, retire the previous key:
+
+```bash
+just seaweedfs-s3-rotate status thanos
+just seaweedfs-s3-rotate revoke thanos CONFIRM
+just seaweedfs-s3-rotate status thanos
+just seaweedfs-s3-canary gaia-01
+```
+
+`revoke` requires exactly two active keys matching the current and immediately
+previous KV versions. It deletes only the previous-version key and verifies
+that the current one remains active. Run it only after every consumer has
+adopted and validated the new credential. KVv2 keeps prior versions; do not
+restore a version whose key has been revoked.
+
+Before revocation, if the new key or consumer refresh fails, keep both keys
+active and run `rollback`. It publishes the immediately previous bundle as a
+new KVv2 version; it does not rewrite history or delete either IAM key. Refresh
+and verify consumers again. Once consumers use the restored key, `revoke` can
+remove the failed candidate key, which is then the immediately previous
+version. After revocation, recovery requires staging another new key and
+publishing another version.
+
+The helper fails closed if the key set or KV history differs from this
+sequence. Do not retry a failed stage blindly: it may have created an extra
+active key. Follow its protected `/run` recovery-path message and inspect the
+IAM key count and current KV version before proceeding. Prior KVv2 versions
+remain available to authorized readers; destroying a version is separate,
+irreversible cleanup and requires an explicit retention decision.
 
 ## Notes
 

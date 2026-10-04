@@ -28,7 +28,9 @@ and stored in OpenBao at `seaweedfs/data/s3/bindings/thanos`. Host Sidecars
 read the binding through OpenBao Agent. Kubernetes Store Gateway and Compactor
 read it through the `thanos-objstore` SecretProviderClass and the
 `thanos-objstore` Kubernetes auth role. Do not copy these credentials into
-manifests or command output.
+manifests or command output. Follow the [SeaweedFS grant rotation procedure](seaweedfs.md#grant-credential-rotation-and-recovery)
+when replacing the credential; CSI Secret updates do not refresh the Thanos
+processes' environment variables.
 
 ## Health and upload checks
 

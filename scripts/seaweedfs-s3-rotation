@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+set +x
+
+phase=${1:-}
+grant=${2:-}
+confirmation=${3:-}
+if [[ ! $grant =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo 'Usage: seaweedfs-s3-rotation {status|history|stage|rollback|revoke} GRANT [CONFIRM]' >&2
+  exit 2
+fi
+case "$phase" in
+  status|history|stage|rollback) ;;
+  revoke)
+    [[ $confirmation == CONFIRM ]] || {
+      echo 'Revocation requires the explicit CONFIRM argument.' >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo 'Usage: seaweedfs-s3-rotation {status|history|stage|rollback|revoke} GRANT [CONFIRM]' >&2
+    exit 2
+    ;;
+esac
+
+WEED=/run/current-system/sw/bin/weed
+BAO=/run/current-system/sw/bin/bao
+TIMEOUT=/run/current-system/sw/bin/timeout
+TOKEN_FILE=/run/seaweedfs-agent-s3-provisioner/openbao.token
+MASTER=gaia-01.node.jort.haus:9333,gaia-02.node.jort.haus:9333,gaia-03.node.jort.haus:9333
+FILER=127.0.0.1:8888
+BAO_ADDR=https://openbao.service.jort.haus:8200
+BAO_CACERT=/etc/ssl/certs/ca-bundle.crt
+
+[[ -x $WEED && -x $BAO && -x $TIMEOUT ]] || {
+  echo 'Required SeaweedFS, OpenBao, or timeout executable is unavailable.' >&2
+  exit 1
+}
+[[ -r $TOKEN_FILE && -s $TOKEN_FILE ]] || {
+  echo 'SeaweedFS S3 provisioner token is unavailable.' >&2
+  exit 1
+}
+
+WORK=$(mktemp -d /run/seaweedfs-filer/s3-rotation.XXXXXX)
+chmod 0700 "$WORK"
+OUT="$WORK/command.out"
+ERR="$WORK/command.err"
+KV="$WORK/current.json"
+PREVIOUS="$WORK/previous.json"
+BUNDLE="$WORK/bundle.json"
+ACTIVE_KEYS="$WORK/active-keys"
+LOCK_IN="$WORK/lock.in"
+LOCK_OUT="$WORK/lock.out"
+LOCK_ERR="$WORK/lock.err"
+LOCK_PID=
+LOCK_ACQUIRED=false
+KEY_CREATED=false
+PUBLISHED=false
+
+cleanup() {
+  status=$?
+  trap - EXIT
+  if [[ -n $LOCK_PID ]] && kill -0 "$LOCK_PID" 2>/dev/null; then
+    if [[ $LOCK_ACQUIRED == true ]]; then
+      printf 'unlock\nexit\n' >&3 2>/dev/null || true
+    else
+      kill "$LOCK_PID" 2>/dev/null || true
+    fi
+    exec 3>&- 2>/dev/null || true
+    exec 4<&- 2>/dev/null || true
+    wait "$LOCK_PID" 2>/dev/null || true
+  fi
+  if (( status != 0 )) && [[ $KEY_CREATED == true && $PUBLISHED == false ]]; then
+    chmod -R go-rwx "$WORK"
+    printf 'A new IAM key may exist without a published binding; protected recovery files remain at %s. Do not retry blindly.\n' "$WORK" >&2
+  else
+    rm -rf -- "$WORK"
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+set -a
+. /run/seaweedfs-pki/jwt.env
+set +a
+BAO_TOKEN=$(<"$TOKEN_FILE")
+[[ -n $BAO_TOKEN ]] || { echo 'SeaweedFS S3 provisioner token is empty.' >&2; exit 1; }
+
+bao_get() {
+  BAO_ADDR="$BAO_ADDR" BAO_CACERT="$BAO_CACERT" BAO_TOKEN="$BAO_TOKEN" \
+    "$TIMEOUT" 45 "$BAO" kv get -format=json -mount=seaweedfs "$@" >"$OUT" 2>"$ERR" \
+    || return 1
+  cp "$OUT" "$KV"
+}
+
+validate_bundle() {
+  "$JQ" -e '
+    .data.data as $d
+    | ($d.access_key_id | (type == "string" and test("^[A-Z0-9]{21}$")))
+      and ($d.secret_access_key | (type == "string" and test("^[A-Za-z0-9]{42}$")))
+      and ($d.bucket | (type == "string" and length > 0))
+      and ($d.endpoint | (type == "string" and startswith("https://")))
+      and ($d.region | (type == "string" and test("^[a-z0-9][a-z0-9-]*$")))
+  ' "$1" >/dev/null 2>&1
+}
+
+get_version() {
+  "$JQ" -er '.data.metadata.version | numbers' "$1" >"$WORK/version"
+  VERSION=$(<"$WORK/version")
+}
+
+read_current() {
+  bao_get "s3/bindings/$grant" || {
+    echo 'Could not read the grant binding from OpenBao.' >&2
+    exit 1
+  }
+  validate_bundle "$KV" || {
+    echo 'The grant binding does not match the expected credential schema.' >&2
+    exit 1
+  }
+  cp "$KV" "$WORK/snapshot.json"
+  get_version "$KV"
+  CURRENT_VERSION=$VERSION
+  "$JQ" -er '.data.data.access_key_id' "$KV" >"$WORK/current-access-key"
+}
+
+read_version() {
+  requested_version=$1
+  bao_get -version="$requested_version" "s3/bindings/$grant" || {
+    echo 'Could not read the requested prior OpenBao KV version.' >&2
+    exit 1
+  }
+  validate_bundle "$KV" || {
+    echo 'The prior KV version does not match the expected credential schema.' >&2
+    exit 1
+  }
+  get_version "$KV"
+  [[ $VERSION == "$requested_version" ]] || {
+    echo 'OpenBao returned an unexpected KV version.' >&2
+    exit 1
+  }
+  cp "$KV" "$PREVIOUS"
+  "$JQ" -e --slurpfile previous "$PREVIOUS" '
+    .data.data as $current
+    | $previous[0].data.data as $prior
+    | $current.bucket == $prior.bucket
+      and $current.endpoint == $prior.endpoint
+      and $current.region == $prior.region
+  ' "$WORK/snapshot.json" >/dev/null 2>&1 || {
+    echo 'Current and previous KV versions do not describe the same grant target.' >&2
+    exit 1
+  }
+}
+
+list_active_keys() {
+  printf 's3.accesskey.list -user %s\nexit\n' "$grant" \
+    | "$TIMEOUT" 60 "$WEED" shell -master="$MASTER" -filer="$FILER" >"$OUT" 2>"$ERR" \
+    || {
+      echo 'Could not list SeaweedFS access-key status.' >&2
+      exit 1
+    }
+  "$AWK" '($2 == "Active" || $2 == "active") { print $1 }' "$OUT" >"$ACTIVE_KEYS"
+}
+
+contains_key() {
+  "$GREP" -Fqx -- "$1" "$2"
+}
+
+start_lock() {
+  "$MKFIFO" "$LOCK_IN" "$LOCK_OUT"
+  exec 3<>"$LOCK_IN"
+  "$WEED" shell -master="$MASTER" -filer="$FILER" \
+    <"$LOCK_IN" >"$LOCK_OUT" 2>"$LOCK_ERR" &
+  LOCK_PID=$!
+  exec 4<"$LOCK_OUT"
+  printf 'lock\nfs.pwd\n' >&3
+  for _ in {1..300}; do
+    if IFS= read -r -t 1 marker <&4; then
+      if [[ $marker == / ]]; then
+        LOCK_ACQUIRED=true
+        return 0
+      fi
+      [[ -z $marker ]] || printf 'SeaweedFS lock: %s\n' "$marker" >&2
+    elif ! kill -0 "$LOCK_PID" 2>/dev/null; then
+      echo 'SeaweedFS shell exited before acquiring its cluster lock.' >&2
+      exit 1
+    fi
+  done
+  echo 'Timed out waiting for the SeaweedFS cluster administrative lock.' >&2
+  exit 1
+}
+
+run_locked_command() {
+  command_text=$1
+  [[ $LOCK_ACQUIRED == true ]] || { echo 'SeaweedFS cluster lock is not held.' >&2; exit 1; }
+  kill -0 "$LOCK_PID" 2>/dev/null || { echo 'SeaweedFS lock session exited unexpectedly.' >&2; exit 1; }
+  "$GREP" -qF 'Failed to renew lock' "$LOCK_ERR" 2>/dev/null && {
+    echo 'SeaweedFS cluster lock renewal failed.' >&2
+    exit 1
+  }
+  printf '%s\nunlock\nexit\n' "$command_text" >&3
+  exec 3>&-
+  "$CAT" <&4 >"$OUT"
+  exec 4<&-
+  if wait "$LOCK_PID"; then
+    LOCK_PID=
+    LOCK_ACQUIRED=false
+    return 0
+  fi
+  LOCK_PID=
+  LOCK_ACQUIRED=false
+  echo 'SeaweedFS shell operation failed; inspect cluster state before retrying.' >&2
+  exit 1
+}
+
+publish_bundle() {
+  before_version=$1
+  if BAO_ADDR="$BAO_ADDR" BAO_CACERT="$BAO_CACERT" BAO_TOKEN="$BAO_TOKEN" \
+    "$TIMEOUT" 45 "$BAO" kv put -mount=seaweedfs "s3/bindings/$grant" "@$BUNDLE" >"$OUT" 2>"$ERR"; then
+    :
+  elif ! bao_get "s3/bindings/$grant" || ! "$JQ" -e --slurpfile expected "$BUNDLE" \
+      '.data.data == $expected[0]' "$KV" >/dev/null 2>&1; then
+    echo 'OpenBao write failed or its result is uncertain; preserve both IAM keys and inspect the protected recovery files.' >&2
+    exit 1
+  fi
+  bao_get "s3/bindings/$grant" || {
+    echo 'Could not read back the OpenBao binding after publication.' >&2
+    exit 1
+  }
+  "$JQ" -e --slurpfile expected "$BUNDLE" '.data.data == $expected[0]' "$KV" >/dev/null 2>&1 || {
+    echo 'OpenBao binding read-back did not match the staged bundle.' >&2
+    exit 1
+  }
+  get_version "$KV"
+  [[ $VERSION -eq $((before_version + 1)) ]] || {
+    echo 'OpenBao KV version did not advance exactly once.' >&2
+    exit 1
+  }
+  PUBLISHED=true
+  printf 'Published and verified OpenBao KV version %s for grant %s.\n' "$VERSION" "$grant"
+}
+
+status() {
+  read_current
+  list_active_keys
+  active_count=$("$WC" -l <"$ACTIVE_KEYS")
+  current_key=$(<"$WORK/current-access-key")
+  if contains_key "$current_key" "$ACTIVE_KEYS"; then
+    current_active=yes
+  else
+    current_active=no
+  fi
+  printf 'Grant %s: KV version %s, active IAM keys %s, canonical key active %s.\n' \
+    "$grant" "$CURRENT_VERSION" "$active_count" "$current_active"
+}
+
+history() {
+  read_current
+  [[ $CURRENT_VERSION -ge 2 ]] || { echo 'No previous KV version is available.' >&2; exit 1; }
+  read_version "$((CURRENT_VERSION - 1))"
+  list_active_keys
+  printf 'Grant %s: KV versions %s and %s describe the same target; active IAM keys %s.\n' \
+    "$grant" "$((CURRENT_VERSION - 1))" "$CURRENT_VERSION" "$("$WC" -l <"$ACTIVE_KEYS")"
+}
+
+stage() {
+  read_current
+  old_key=$(<"$WORK/current-access-key")
+  list_active_keys
+  if [[ $("$WC" -l <"$ACTIVE_KEYS") -ne 1 ]] || ! contains_key "$old_key" "$ACTIVE_KEYS"; then
+    echo 'Stage requires exactly one active IAM key matching the current binding; no changes made.' >&2
+    exit 1
+  fi
+
+  set +o pipefail
+  "$OPENSSL" rand -base64 256 | "$TR" -dc 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' | "$HEAD" -c 21 >"$WORK/new-access-key"
+  "$OPENSSL" rand -base64 256 | "$TR" -dc 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789' | "$HEAD" -c 42 >"$WORK/new-secret-key"
+  set -o pipefail
+  [[ $("$WC" -c <"$WORK/new-access-key") -eq 21 && $("$WC" -c <"$WORK/new-secret-key") -eq 42 ]] || {
+    echo 'Cryptographic key generation returned an unexpected length.' >&2
+    exit 1
+  }
+  new_key=$(<"$WORK/new-access-key")
+  new_secret=$(<"$WORK/new-secret-key")
+  if [[ $new_key == "$old_key" ]]; then
+    echo 'Generated key collided with the existing key.' >&2
+    exit 1
+  fi
+
+  start_lock
+  KEY_CREATED=true
+  run_locked_command "s3.accesskey.create -user $grant -access_key $new_key -secret_key $new_secret"
+  unset new_secret
+  list_active_keys
+  if [[ $("$WC" -l <"$ACTIVE_KEYS") -ne 2 ]] \
+    || ! contains_key "$old_key" "$ACTIVE_KEYS" \
+    || ! contains_key "$new_key" "$ACTIVE_KEYS"; then
+    echo 'The new key was not verified alongside the old key; keep both credentials and investigate.' >&2
+    exit 1
+  fi
+
+  "$JQ" -n \
+    --arg bucket "$("$JQ" -er '.data.data.bucket' "$WORK/snapshot.json")" \
+    --arg endpoint "$("$JQ" -er '.data.data.endpoint' "$WORK/snapshot.json")" \
+    --arg region "$("$JQ" -er '.data.data.region' "$WORK/snapshot.json")" \
+    --rawfile access_key_id "$WORK/new-access-key" \
+    --rawfile secret_access_key "$WORK/new-secret-key" \
+    '{access_key_id: ($access_key_id | rtrimstr("\n")), bucket: $bucket, endpoint: $endpoint, region: $region, secret_access_key: ($secret_access_key | rtrimstr("\n"))}' \
+    >"$BUNDLE"
+  publish_bundle "$CURRENT_VERSION"
+}
+
+rollback() {
+  read_current
+  [[ $CURRENT_VERSION -ge 2 ]] || { echo 'No prior KV version is available for rollback.' >&2; exit 1; }
+  current_key=$(<"$WORK/current-access-key")
+  read_version "$((CURRENT_VERSION - 1))"
+  previous_key=$("$JQ" -er '.data.data.access_key_id' "$PREVIOUS")
+  [[ $previous_key != "$current_key" ]] || { echo 'Prior KV version has the same key as the current version.' >&2; exit 1; }
+  list_active_keys
+  if [[ $("$WC" -l <"$ACTIVE_KEYS") -ne 2 ]] \
+    || ! contains_key "$current_key" "$ACTIVE_KEYS" \
+    || ! contains_key "$previous_key" "$ACTIVE_KEYS"; then
+    echo 'Rollback requires both current and prior keys to remain active; no changes made.' >&2
+    exit 1
+  fi
+  "$JQ" -c '.data.data' "$PREVIOUS" >"$BUNDLE"
+  publish_bundle "$CURRENT_VERSION"
+}
+
+revoke() {
+  read_current
+  [[ $CURRENT_VERSION -ge 2 ]] || { echo 'No prior KV version is available to identify the old key.' >&2; exit 1; }
+  current_key=$(<"$WORK/current-access-key")
+  read_version "$((CURRENT_VERSION - 1))"
+  old_key=$("$JQ" -er '.data.data.access_key_id' "$PREVIOUS")
+  [[ $old_key != "$current_key" ]] || { echo 'Prior KV version has the same key as the current version.' >&2; exit 1; }
+  list_active_keys
+  if [[ $("$WC" -l <"$ACTIVE_KEYS") -ne 2 ]] \
+    || ! contains_key "$current_key" "$ACTIVE_KEYS" \
+    || ! contains_key "$old_key" "$ACTIVE_KEYS"; then
+    echo 'Revocation requires exactly the current and immediately previous keys to be active; no changes made.' >&2
+    exit 1
+  fi
+
+  start_lock
+  run_locked_command "s3.accesskey.delete -user $grant -access_key $old_key"
+  list_active_keys
+  if [[ $("$WC" -l <"$ACTIVE_KEYS") -ne 1 ]] \
+    || ! contains_key "$current_key" "$ACTIVE_KEYS" \
+    || contains_key "$old_key" "$ACTIVE_KEYS"; then
+    echo 'Old-key revocation could not be verified; inspect IAM state before retrying.' >&2
+    exit 1
+  fi
+  printf 'Revoked the prior key for grant %s; current KV version %s remains active.\n' "$grant" "$CURRENT_VERSION"
+}
+
+# Resolve tools from the temporary Nix shell without exposing credential values.
+JQ=$(command -v jq)
+OPENSSL=$(command -v openssl)
+AWK=$(command -v awk)
+GREP=$(command -v grep)
+WC=$(command -v wc)
+HEAD=$(command -v head)
+TR=$(command -v tr)
+CAT=$(command -v cat)
+MKFIFO=$(command -v mkfifo)
+
+case "$phase" in
+  status) status ;;
+  history) history ;;
+  stage) stage ;;
+  rollback) rollback ;;
+  revoke) revoke ;;
+esac

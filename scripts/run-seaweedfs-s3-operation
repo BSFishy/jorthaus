@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+repo_root=$(git rev-parse --show-toplevel)
+operation=${1:-}
+shift || true
+
+case "$operation" in
+  rotate)
+    phase=${1:-}
+    grant=${2:-}
+    confirmation=${3:-}
+    [[ $phase =~ ^(status|history|stage|rollback|revoke)$ ]] || {
+      echo 'Rotation phase must be status, history, stage, rollback, or revoke.' >&2
+      exit 2
+    }
+    [[ $grant =~ ^[a-z0-9][a-z0-9-]*$ ]] || {
+      echo 'Grant ID has an invalid format.' >&2
+      exit 2
+    }
+    if [[ $phase == revoke ]]; then
+      [[ $confirmation == CONFIRM ]] || {
+        echo 'Revocation requires the explicit CONFIRM argument.' >&2
+        exit 2
+      }
+    elif [[ -n $confirmation ]]; then
+      echo 'Confirmation is accepted only for the revoke phase.' >&2
+      exit 2
+    fi
+    host=gaia-01
+    packages='jq openssl'
+    helper="$repo_root/scripts/seaweedfs-s3-rotation"
+    args="$phase $grant"
+    [[ -z $confirmation ]] || args="$args $confirmation"
+    ;;
+  canary)
+    [[ $# -le 1 ]] || { echo 'The canary accepts at most one Gaia control-plane host.' >&2; exit 2; }
+    host=${1:-gaia-03}
+    [[ $host =~ ^gaia-0[1-3]$ ]] || {
+      echo 'The canary host must be gaia-01, gaia-02, or gaia-03.' >&2
+      exit 2
+    }
+    packages='awscli2 jq'
+    helper="$repo_root/scripts/seaweedfs-s3-canary"
+    args=
+    ;;
+  *)
+    echo 'Usage: run-seaweedfs-s3-operation {rotate PHASE GRANT [CONFIRM]|canary [GAIA-HOST]}' >&2
+    exit 2
+    ;;
+esac
+
+remote="matt@$host.node.jort.haus"
+remote_dir="/run/seaweedfs-filer/ops-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+cleanup() {
+  ssh -o BatchMode=yes "$remote" \
+    "sudo -u seaweedfs-filer /run/current-system/sw/bin/rm -rf -- '$remote_dir'" \
+    >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+ssh -o BatchMode=yes "$remote" \
+  "sudo -u seaweedfs-filer /run/current-system/sw/bin/mkdir -m 0700 -p '$remote_dir' '$remote_dir/cache'"
+ssh -o BatchMode=yes "$remote" \
+  "sudo -u seaweedfs-filer /run/current-system/sw/bin/tee '$remote_dir/operation.sh' >/dev/null" \
+  < "$helper"
+ssh -o BatchMode=yes "$remote" \
+  "sudo -u seaweedfs-filer env HOME='$remote_dir' XDG_CACHE_HOME='$remote_dir/cache' CANARY_HOST='$host' /run/current-system/sw/bin/nix-shell -p $packages --run 'bash $remote_dir/operation.sh $args'"

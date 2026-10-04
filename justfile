@@ -100,6 +100,17 @@ create-seaweedfs-postgres-secret:
 postgres-ensure:
   ssh matt@gaia-01.node.jort.haus sudo systemctl start jorthaus-postgres-ensure.service
 
+# Stage, roll back, or retire a SeaweedFS S3 grant key without printing it.
+[script]
+[group('seaweedfs')]
+seaweedfs-s3-rotate phase grant confirmation='':
+  scripts/run-seaweedfs-s3-operation rotate '{{phase}}' '{{grant}}' '{{confirmation}}'
+
+# Exercise PUT/HEAD/GET/DELETE through a selected Gaia SeaweedFS filer.
+[group('seaweedfs')]
+seaweedfs-s3-canary host='gaia-03':
+  scripts/run-seaweedfs-s3-operation canary '{{host}}'
+
 # Encrypt the public K3s server CA for the host-native Prometheus pair.
 [group('secret')]
 create-prometheus-kubelet-ca:
