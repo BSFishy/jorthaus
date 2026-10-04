@@ -63,6 +63,7 @@ in
   "secrets/openbao-key-2026-08-23.age".publicKeys = openbao-hosts;
 
   "secrets/patroni-postgres-superuser-password.age".publicKeys = postgres-hosts;
+  "secrets/postgres-exporter-password.age".publicKeys = postgres-hosts;
   "secrets/patroni-postgres-replication-password.age".publicKeys = postgres-hosts;
   "secrets/postgres-wal-g-approle-role-id.age".publicKeys = postgres-hosts;
   "secrets/postgres-wal-g-approle-secret-id.age".publicKeys = postgres-hosts;

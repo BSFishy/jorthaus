@@ -321,6 +321,14 @@ in
           connectionLimit = 5;
         };
 
+        prometheus_exporter = {
+          login = true;
+          passwordFile = config.age.secrets.prometheus-postgres-exporter-password.path;
+          connectionLimit = 3;
+          memberships = [ "pg_monitor" ];
+          databaseGrants.postgres = [ "CONNECT" ];
+        };
+
         ${walGBackupRole} = {
           login = true;
           replication = true;

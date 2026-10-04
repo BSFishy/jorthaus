@@ -16,6 +16,9 @@ let
   nodeExporterHosts = lib.filter (peer: peer.slivers.nodeExporter.enable) (
     builtins.attrValues hostInventory
   );
+  postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
+  );
   victorialogsHosts = lib.filter (peer: peer.slivers.victorialogs.enable) (
     builtins.attrValues hostInventory
   );
@@ -37,6 +40,8 @@ let
   statePath = "/var/lib/prometheus";
   otherAlertmanagerHosts = lib.filter (peer: peer.hostname != host.hostname) alertmanagerHosts;
   hostTarget = peer: "${peer.ipam.ipv4.address}:9100";
+  postgresTarget = peer: "${peer.ipam.ipv4.address}:9187";
+  postgresBootstrapHost = if postgresHosts == [ ] then null else lib.head postgresHosts;
   alertmanagerTarget = peer: "${peer.ipam.ipv4.address}:9093";
   prometheusTarget = peer: "${peer.ipam.ipv4.address}:9090";
   victorialogsTarget = peer: "${peer.ipam.ipv4.address}:9428";
@@ -242,6 +247,36 @@ in
       };
     })
 
+    (lib.mkIf host.slivers.postgres.enable {
+      age.secrets.prometheus-postgres-exporter-password = {
+        file = ../../../../secrets/postgres-exporter-password.age;
+        owner = "postgres-exporter";
+        group = "postgres-exporter";
+        mode = "0400";
+      };
+
+      services.prometheus.exporters.postgres = {
+        enable = true;
+        listenAddress = host.ipam.ipv4.address;
+        openFirewall = true;
+        dataSourceName = "";
+      };
+
+      systemd.services."prometheus-postgres-exporter" = {
+        environment = {
+          DATA_SOURCE_URI = "${host.hostname}.node.jort.haus:5432/postgres?sslmode=verify-full&sslrootcert=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          DATA_SOURCE_USER = "prometheus_exporter";
+          DATA_SOURCE_PASS_FILE = config.age.secrets.prometheus-postgres-exporter-password.path;
+        };
+      }
+      //
+        lib.optionalAttrs (postgresBootstrapHost != null && host.hostname == postgresBootstrapHost.hostname)
+          {
+            after = [ "jorthaus-postgres-ensure.service" ];
+            requires = [ "jorthaus-postgres-ensure.service" ];
+          };
+    })
+
     (lib.mkIf isPrometheus {
       assertions = [
         {
@@ -336,6 +371,14 @@ in
               targets = [ (hostTarget peer) ];
               labels.host = peer.hostname;
             }) nodeExporterHosts;
+          }
+          {
+            job_name = "postgres";
+            static_configs = map (peer: {
+              targets = [ (postgresTarget peer) ];
+              labels.host = peer.hostname;
+            }) postgresHosts;
+            sample_limit = 5000;
           }
           {
             job_name = "prometheus";

@@ -28,13 +28,62 @@ groups:
   - name: monitoring-health
     rules:
       - alert: MonitoringTargetDown
-        expr: up{job=~"prometheus|alertmanager|victorialogs|thanos-sidecar|thanos-query|thanos-storegateway|thanos-compactor|kube-state-metrics|kubelet|kubelet-cadvisor|kubernetes-control-plane|coredns|kured|secrets-store-csi|traefik|cert-manager|authentik-server|authentik-worker|seaweedfs-csi|cilium-agent|cilium-operator|cilium-envoy"} == 0
+        expr: up{job=~"prometheus|alertmanager|victorialogs|thanos-sidecar|thanos-query|thanos-storegateway|thanos-compactor|kube-state-metrics|kubelet|kubelet-cadvisor|kubernetes-control-plane|coredns|kured|secrets-store-csi|traefik|cert-manager|authentik-server|authentik-worker|seaweedfs-csi|cilium-agent|cilium-operator|cilium-envoy|postgres"} == 0
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} target {{ $labels.instance }} is unreachable"
           description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 10 minutes."
+  - name: postgres-capacity
+    rules:
+      - alert: PostgresExporterDatabaseDown
+        expr: pg_up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is unreachable from the exporter on {{ $labels.host }}"
+          description: "The PostgreSQL exporter cannot connect to {{ $labels.instance }}."
+      - alert: PostgresExporterScrapeErrors
+        expr: pg_exporter_last_scrape_error{job="postgres"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter cannot collect all metrics from {{ $labels.host }}"
+          description: "At least one PostgreSQL exporter collector is failing on {{ $labels.instance }}."
+      - record: postgres_connection_slot_utilization:ratio
+        expr: |
+          (
+            # The exporter excludes its single pooled backend from this metric.
+            sum by (host, instance) (
+              pg_stat_activity_count{job="postgres", backend_type="client backend"}
+            )
+            + 1
+          )
+          /
+          (
+            max by (host, instance) (pg_settings_max_connections{job="postgres"})
+            - max by (host, instance) (pg_settings_superuser_reserved_connections{job="postgres"})
+            - max by (host, instance) (pg_settings_reserved_connections{job="postgres"})
+          )
+      - alert: PostgresConnectionSlotsWarning
+        expr: postgres_connection_slot_utilization:ratio >= 0.7 and postgres_connection_slot_utilization:ratio < 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL client slots are above 70% on {{ $labels.host }}"
+          description: "Client backends are using {{ $value | humanizePercentage }} of slots available to non-reserved roles."
+      - alert: PostgresConnectionSlotsCritical
+        expr: postgres_connection_slot_utilization:ratio >= 0.9
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL client slots are above 90% on {{ $labels.host }}"
+          description: "Client backends are using {{ $value | humanizePercentage }} of slots available to non-reserved roles."
   - name: kubernetes-object-health
     rules:
       - alert: KubernetesDeploymentReplicasUnavailable
