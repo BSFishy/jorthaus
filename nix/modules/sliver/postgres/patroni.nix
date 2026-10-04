@@ -12,6 +12,7 @@ let
   patroniNamespace = "/service";
   restApiPort = 8008;
   postgresPort = 5432;
+  maxConnections = 200;
   postgresNetwork = "10.1.0.0/16";
   serviceAddress = "10.1.11.11";
   patroniDataDir = "/srv/patroni";
@@ -416,6 +417,7 @@ in
                 hot_standby = "on";
                 max_wal_senders = 10;
                 max_replication_slots = 10;
+                max_connections = maxConnections;
                 wal_log_hints = "on";
                 password_encryption = "scram-sha-256";
                 archive_mode = "on";
@@ -445,6 +447,7 @@ in
           };
 
           parameters = {
+            max_connections = maxConnections;
             unix_socket_directories = "/run/postgresql";
             ssl = "on";
             ssl_cert_file = stagedCertFile;

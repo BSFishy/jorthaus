@@ -13,6 +13,9 @@ let
   secretIdFile = config.age.secrets.${secretIdSecretName}.path;
   postgresPasswordSecretName = "seaweedfs-postgres-password";
   postgresPasswordFile = config.age.secrets.${postgresPasswordSecretName}.path;
+  usePgBouncer = host.slivers.seaweedfs.pgbouncer.enable;
+  postgresHost = if usePgBouncer then "pgbouncer.service.jort.haus" else "postgres.service.jort.haus";
+  postgresPort = if usePgBouncer then 6432 else 5432;
   filerAgentDir = "/run/seaweedfs-agent-filer";
   filerRuntimeDir = "/run/seaweedfs-filer";
   filerConfigDir = "${filerRuntimeDir}/.seaweedfs";
@@ -80,12 +83,13 @@ let
         PRIMARY KEY (dirhash, name)
       );
     """
-    hostname = "postgres.service.jort.haus"
-    port = 5432
+    hostname = "${postgresHost}"
+    port = ${toString postgresPort}
     username = "seaweedfs_static"
     password = "$password"
     database = "seaweedfs"
     schema = "public"
+    pgbouncer_compatible = ${lib.boolToString usePgBouncer}
     sslmode = "verify-full"
     sslrootcert = "system"
     enableUpsert = true
@@ -108,6 +112,13 @@ let
 in
 {
   config = lib.mkIf (cfg.enable && cfg.controlplaneEnabled) {
+    assertions = [
+      {
+        assertion = !usePgBouncer || host.slivers.pgbouncer.enable;
+        message = "SeaweedFS PgBouncer mode requires PgBouncer on the same host.";
+      }
+    ];
+
     age.secrets.${postgresPasswordSecretName} = {
       file = ../../../../secrets/seaweedfs-postgres-password.age;
       owner = "seaweedfs-filer";

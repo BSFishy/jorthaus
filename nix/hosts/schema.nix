@@ -26,6 +26,7 @@ in
     slivers.etcd.enable = mkEnableOption "the etcd sliver";
     slivers.openbao.enable = mkEnableOption "the OpenBao sliver";
     slivers.postgres.enable = mkEnableOption "the Patroni/Postgres sliver";
+    slivers.pgbouncer.enable = mkEnableOption "the PgBouncer sliver";
     slivers.valkey.enable = mkEnableOption "the Valkey sliver";
     slivers.victorialogs.enable = mkEnableOption "the VictoriaLogs sliver";
     slivers.fluentBit.enable = mkEnableOption "the Fluent Bit sliver";
@@ -56,6 +57,8 @@ in
         default = "dataplane";
         description = "SeaweedFS node role.";
       };
+
+      pgbouncer.enable = mkEnableOption "PgBouncer for SeaweedFS filer metadata";
 
       topology = {
         dataCenter = mkOption {

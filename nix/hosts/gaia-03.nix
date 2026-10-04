@@ -7,6 +7,7 @@
     openbao.enable = true;
     etcd.enable = true;
     postgres.enable = true;
+    pgbouncer.enable = true;
     valkey.enable = true;
     victorialogs.enable = true;
     fluentBit.enable = true;
@@ -19,6 +20,7 @@
     seaweedfs = {
       enable = true;
       role = "controlplane";
+      pgbouncer.enable = true;
     };
   };
 

@@ -16,6 +16,7 @@ dns_hosts = {
   "seaweed-filer.service"  = "10.1.11.14"
   "s3.service"             = "10.1.11.15"
   "k8s.service"            = "10.1.11.16"
+  "pgbouncer.service"      = "10.1.11.17"
   "mc"                     = "10.1.12.10"
   "ssh.git"                = "10.1.12.21"
 }

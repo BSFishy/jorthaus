@@ -5,6 +5,7 @@ _:
     ./etcd.nix
     ./openbao.nix
     ./postgres
+    ./pgbouncer.nix
     ./valkey.nix
     ./k3s.nix
     ./seaweedfs
