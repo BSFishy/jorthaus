@@ -9,22 +9,88 @@ groups:
         annotations:
           summary: "Node exporter on {{ $labels.host }} is unreachable"
           description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 10 minutes."
+      - record: node_cpu_utilization:ratio
+        expr: |
+          1 - avg by (host, instance) (
+            rate(node_cpu_seconds_total{job="node", mode="idle"}[5m])
+          )
+      - alert: NodeCpuUsageWarning
+        expr: node_cpu_utilization:ratio > 0.8 and node_cpu_utilization:ratio <= 0.95
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage is high on {{ $labels.host }}"
+          description: "Host CPU usage has remained above 80% for 15 minutes ({{ $value | humanizePercentage }})."
+      - alert: NodeCpuUsageCritical
+        expr: node_cpu_utilization:ratio > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CPU usage is critically high on {{ $labels.host }}"
+          description: "Host CPU usage has remained above 95% for 5 minutes ({{ $value | humanizePercentage }})."
       - alert: NodeFilesystemSpaceLow
-        expr: 100 * node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} < 10
+        expr: |
+          100 * node_filesystem_avail_bytes{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"}
+          / node_filesystem_size_bytes{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} < 10
+          and
+          100 * node_filesystem_avail_bytes{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"}
+          / node_filesystem_size_bytes{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} >= 5
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "Filesystem space is low on {{ $labels.host }}"
           description: "{{ $labels.mountpoint }} has less than 10% available space."
+      - alert: NodeFilesystemSpaceCritical
+        expr: 100 * node_filesystem_avail_bytes{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} / node_filesystem_size_bytes{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} < 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Filesystem space is critically low on {{ $labels.host }}"
+          description: "{{ $labels.mountpoint }} has less than 5% available space."
+      - alert: NodeFilesystemInodesLow
+        expr: |
+          100 * node_filesystem_files_free{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"}
+          / node_filesystem_files{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} < 20
+          and
+          100 * node_filesystem_files_free{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"}
+          / node_filesystem_files{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} >= 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Filesystem inodes are low on {{ $labels.host }}"
+          description: "{{ $labels.mountpoint }} has less than 20% of inodes available."
+      - alert: NodeFilesystemInodesCritical
+        expr: 100 * node_filesystem_files_free{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} / node_filesystem_files{job="node", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup2|tracefs|debugfs|configfs|fuse.*"} < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Filesystem inodes are critically low on {{ $labels.host }}"
+          description: "{{ $labels.mountpoint }} has less than 10% of inodes available."
       - alert: NodeMemoryAvailableLow
-        expr: 100 * node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 10
+        expr: |
+          100 * node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"} < 10
+          and
+          100 * node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"} >= 5
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "Available memory is low on {{ $labels.host }}"
           description: "Less than 10% of memory is available on {{ $labels.instance }}."
+      - alert: NodeMemoryAvailableCritical
+        expr: 100 * node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"} < 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Available memory is critically low on {{ $labels.host }}"
+          description: "Less than 5% of memory is available on {{ $labels.instance }}."
   - name: monitoring-health
     rules:
       - alert: MonitoringTargetDown

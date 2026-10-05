@@ -1,0 +1,168 @@
+rule_files:
+  - rules.yml
+evaluation_interval: 30s
+tests:
+  - interval: 30s
+    input_series:
+      - series: 'node_cpu_seconds_total{job="node",host="gaia-01",instance="10.1.10.1:9100",cpu="0",mode="idle"}'
+        values: '0+3x50'
+      - series: 'node_cpu_seconds_total{job="node",host="gaia-02",instance="10.1.10.2:9100",cpu="0",mode="idle"}'
+        values: '0+0.9x50'
+      - series: 'node_cpu_seconds_total{job="node",host="gaia-03",instance="10.1.10.3:9100",cpu="0",mode="idle"}'
+        values: '0+27x50'
+      - series: 'node_memory_MemAvailable_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '8+0x50'
+      - series: 'node_memory_MemTotal_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '100+0x50'
+      - series: 'node_memory_MemAvailable_bytes{job="node",host="gaia-02",instance="10.1.10.2:9100"}'
+        values: '4+0x50'
+      - series: 'node_memory_MemTotal_bytes{job="node",host="gaia-02",instance="10.1.10.2:9100"}'
+        values: '100+0x50'
+      - series: 'node_memory_MemAvailable_bytes{job="node",host="gaia-03",instance="10.1.10.3:9100"}'
+        values: '50+0x50'
+      - series: 'node_memory_MemTotal_bytes{job="node",host="gaia-03",instance="10.1.10.3:9100"}'
+        values: '100+0x50'
+      - series: 'node_filesystem_avail_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",device="/dev/test",fstype="xfs",mountpoint="/warning"}'
+        values: '8+0x50'
+      - series: 'node_filesystem_size_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",device="/dev/test",fstype="xfs",mountpoint="/warning"}'
+        values: '100+0x50'
+      - series: 'node_filesystem_avail_bytes{job="node",host="gaia-02",instance="10.1.10.2:9100",device="/dev/test",fstype="xfs",mountpoint="/critical"}'
+        values: '4+0x50'
+      - series: 'node_filesystem_size_bytes{job="node",host="gaia-02",instance="10.1.10.2:9100",device="/dev/test",fstype="xfs",mountpoint="/critical"}'
+        values: '100+0x50'
+      - series: 'node_filesystem_avail_bytes{job="node",host="gaia-03",instance="10.1.10.3:9100",device="/dev/test",fstype="xfs",mountpoint="/healthy"}'
+        values: '50+0x50'
+      - series: 'node_filesystem_size_bytes{job="node",host="gaia-03",instance="10.1.10.3:9100",device="/dev/test",fstype="xfs",mountpoint="/healthy"}'
+        values: '100+0x50'
+      - series: 'node_filesystem_files_free{job="node",host="gaia-01",instance="10.1.10.1:9100",device="/dev/test",fstype="xfs",mountpoint="/warning"}'
+        values: '15+0x50'
+      - series: 'node_filesystem_files{job="node",host="gaia-01",instance="10.1.10.1:9100",device="/dev/test",fstype="xfs",mountpoint="/warning"}'
+        values: '100+0x50'
+      - series: 'node_filesystem_files_free{job="node",host="gaia-02",instance="10.1.10.2:9100",device="/dev/test",fstype="xfs",mountpoint="/critical"}'
+        values: '8+0x50'
+      - series: 'node_filesystem_files{job="node",host="gaia-02",instance="10.1.10.2:9100",device="/dev/test",fstype="xfs",mountpoint="/critical"}'
+        values: '100+0x50'
+      - series: 'node_filesystem_files_free{job="node",host="gaia-03",instance="10.1.10.3:9100",device="/dev/test",fstype="xfs",mountpoint="/healthy"}'
+        values: '50+0x50'
+      - series: 'node_filesystem_files{job="node",host="gaia-03",instance="10.1.10.3:9100",device="/dev/test",fstype="xfs",mountpoint="/healthy"}'
+        values: '100+0x50'
+    alert_rule_test:
+      - eval_time: 21m
+        alertname: NodeCpuUsageWarning
+        exp_alerts:
+          - exp_labels:
+              host: gaia-01
+              instance: 10.1.10.1:9100
+              severity: warning
+            exp_annotations:
+              summary: "CPU usage is high on gaia-01"
+              description: "Host CPU usage has remained above 80% for 15 minutes (90%)."
+      - eval_time: 21m
+        alertname: NodeCpuUsageCritical
+        exp_alerts:
+          - exp_labels:
+              host: gaia-02
+              instance: 10.1.10.2:9100
+              severity: critical
+            exp_annotations:
+              summary: "CPU usage is critically high on gaia-02"
+              description: "Host CPU usage has remained above 95% for 5 minutes (97%)."
+      - eval_time: 21m
+        alertname: NodeMemoryAvailableLow
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-01
+              instance: 10.1.10.1:9100
+              severity: warning
+            exp_annotations:
+              summary: "Available memory is low on gaia-01"
+              description: "Less than 10% of memory is available on 10.1.10.1:9100."
+      - eval_time: 21m
+        alertname: NodeMemoryAvailableCritical
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-02
+              instance: 10.1.10.2:9100
+              severity: critical
+            exp_annotations:
+              summary: "Available memory is critically low on gaia-02"
+              description: "Less than 5% of memory is available on 10.1.10.2:9100."
+      - eval_time: 21m
+        alertname: NodeFilesystemSpaceLow
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-01
+              instance: 10.1.10.1:9100
+              device: /dev/test
+              fstype: xfs
+              mountpoint: /warning
+              severity: warning
+            exp_annotations:
+              summary: "Filesystem space is low on gaia-01"
+              description: "/warning has less than 10% available space."
+      - eval_time: 21m
+        alertname: NodeFilesystemSpaceCritical
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-02
+              instance: 10.1.10.2:9100
+              device: /dev/test
+              fstype: xfs
+              mountpoint: /critical
+              severity: critical
+            exp_annotations:
+              summary: "Filesystem space is critically low on gaia-02"
+              description: "/critical has less than 5% available space."
+      - eval_time: 21m
+        alertname: NodeFilesystemInodesLow
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-01
+              instance: 10.1.10.1:9100
+              device: /dev/test
+              fstype: xfs
+              mountpoint: /warning
+              severity: warning
+            exp_annotations:
+              summary: "Filesystem inodes are low on gaia-01"
+              description: "/warning has less than 20% of inodes available."
+      - eval_time: 21m
+        alertname: NodeFilesystemInodesCritical
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-02
+              instance: 10.1.10.2:9100
+              device: /dev/test
+              fstype: xfs
+              mountpoint: /critical
+              severity: critical
+            exp_annotations:
+              summary: "Filesystem inodes are critically low on gaia-02"
+              description: "/critical has less than 10% of inodes available."
+  - interval: 30s
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '8+0x20 50+0x20'
+      - series: 'node_memory_MemTotal_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '100+0x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: NodeMemoryAvailableLow
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-01
+              instance: 10.1.10.1:9100
+              severity: warning
+            exp_annotations:
+              summary: "Available memory is low on gaia-01"
+              description: "Less than 10% of memory is available on 10.1.10.1:9100."
+      - eval_time: 12m
+        alertname: NodeMemoryAvailableLow
+        exp_alerts: []
