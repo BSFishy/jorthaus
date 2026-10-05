@@ -14,6 +14,29 @@ let
       builtins.attrValues hostInventory
     )
   );
+  dataplaneHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (
+      peer: peer.slivers.seaweedfs.enable && peer.install.dataDisks != [ ]
+    ) (builtins.attrValues hostInventory)
+  );
+  systemdServices =
+    lib.optionals (controlplaneHosts != [ ]) [
+      {
+        unit = "seaweedfs-master.service";
+        sliver = "seaweedfs";
+        severity = "critical";
+      }
+      {
+        unit = "seaweedfs-filer.service";
+        sliver = "seaweedfs";
+        severity = "critical";
+      }
+    ]
+    ++ lib.optional (dataplaneHosts != [ ]) {
+      unit = "seaweedfs-volume.service";
+      sliver = "seaweedfs";
+      severity = "critical";
+    };
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
   );
@@ -382,7 +405,15 @@ in
     };
   };
 
-  config = lib.mkIf host.slivers.seaweedfs.enable {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf host.slivers.seaweedfs.enable {
+    jorthaus.prometheus.localSystemdServices =
+      lib.optionals controlplaneEnabled [
+        "seaweedfs-master.service"
+        "seaweedfs-filer.service"
+      ]
+      ++ lib.optionals dataplaneEnabled [ "seaweedfs-volume.service" ];
     assertions = [
       {
         assertion = controlplaneEnabled || dataplaneEnabled;
@@ -401,5 +432,6 @@ in
         message = "The seaweedfs dataplane requires at least one derived volume directory.";
       }
     ];
-  };
+    })
+  ];
 }

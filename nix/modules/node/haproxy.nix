@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  hostInventory,
+  lib,
+  ...
+}:
 let
   inherit (lib)
     concatLines
@@ -16,6 +21,14 @@ let
   cfg = config.jorthaus.haproxy;
 
   enabledServices = lib.filterAttrs (_: service: service.enable) cfg.services;
+  haproxyHosts = lib.filter (peer: peer.slivers.postgres.enable || peer.slivers.valkey.enable) (
+    builtins.attrValues hostInventory
+  );
+  systemdServices = lib.optional (haproxyHosts != [ ]) {
+    unit = "haproxy.service";
+    sliver = "node";
+    severity = "warning";
+  };
   renderedGlobalConfig = lib.concatMapStringsSep "\n" (line: "  ${line}") (
     lib.filter (line: line != "") (lib.splitString "\n" cfg.globalConfig)
   );
@@ -143,8 +156,11 @@ in
     };
   };
 
-  config = mkIf (enabledServices != { }) {
-    assertions = mapAttrsToList (name: service: {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (mkIf (enabledServices != { }) {
+      jorthaus.prometheus.localSystemdServices = [ "haproxy.service" ];
+      assertions = mapAttrsToList (name: service: {
       assertion = service.backends != [ ];
       message = "jorthaus.haproxy.services.${name} must define at least one backend.";
     }) enabledServices;
@@ -182,5 +198,6 @@ in
     ]
     ++ unique (flatten (mapAttrsToList (_: service: service.wants) enabledServices));
     systemd.services.haproxy.restartTriggers = [ config.environment.etc."haproxy.cfg".source ];
-  };
+    })
+  ];
 }

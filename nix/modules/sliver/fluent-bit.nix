@@ -7,6 +7,14 @@
 }:
 let
   enabled = host.slivers.fluentBit.enable;
+  fluentBitHosts = lib.filter (peer: peer.slivers.fluentBit.enable) (
+    builtins.attrValues hostInventory
+  );
+  systemdServices = lib.optional (fluentBitHosts != [ ]) {
+    unit = "fluent-bit.service";
+    sliver = "fluentBit";
+    severity = "warning";
+  };
   victoriaLogsHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.victorialogs.enable) (builtins.attrValues hostInventory)
   );
@@ -120,7 +128,10 @@ let
   '';
 in
 {
-  config = lib.mkIf enabled {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf enabled {
+    jorthaus.prometheus.localSystemdServices = [ "fluent-bit.service" ];
     assertions = [
       {
         assertion = lib.length victoriaLogsHosts == 3;
@@ -300,5 +311,6 @@ in
         MemoryMax = "512M";
       };
     };
-  };
+    })
+  ];
 }

@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+
+HOST = "gaia-01"
+INSTANCE = "10.1.10.1:9100"
+STATES = ["active", "activating", "deactivating", "failed", "inactive"]
+SCENARIOS = {
+    "etcd.service": "failed",
+    "fluent-bit.service": "inactive",
+    "openbao.service": "missing",
+}
+
+
+def rule_file_path():
+    return subprocess.check_output(
+        [
+            "nix",
+            "eval",
+            "--raw",
+            ".#nixosConfigurations.gaia-01.config.services.prometheus.ruleFiles",
+            "--apply",
+            "x: builtins.toString (builtins.head x)",
+        ],
+        text=True,
+    ).strip()
+
+
+def metric_series(unit, state, value):
+    return {
+        "series": (
+            f'node_systemd_unit_state{{job="node",host="{HOST}",instance="{INSTANCE}",'
+            f'name="{unit}",state="{state}",type="simple"}}'
+        ),
+        "values": f"{value}+0x20",
+    }
+
+
+def input_series(units, scenario):
+    series = [
+        {
+            "series": f'up{{job="node",host="{HOST}",instance="{INSTANCE}"}}',
+            "values": "1+0x20",
+        }
+    ]
+    for unit in sorted(units):
+        state_override = scenario.get(unit)
+        if state_override == "missing":
+            continue
+        for state in STATES:
+            current_state = state_override or "active"
+            series.append(metric_series(unit, state, int(state == current_state)))
+    return series
+
+
+def expected_alert(unit, state, metadata):
+    if state == "failed":
+        summary = f"Systemd unit {unit} failed on {HOST}"
+        description = f"Systemd unit {unit} has remained failed on {HOST}."
+    else:
+        summary = f"Systemd unit {unit} is not active on {HOST}"
+        description = f"Systemd unit {unit} has remained inactive or transitional on {HOST}."
+    return {
+        "exp_labels": {
+            "job": "node",
+            "host": HOST,
+            "instance": INSTANCE,
+            "name": unit,
+            "state": state,
+            "type": "simple",
+            **metadata,
+        },
+        "exp_annotations": {
+            "summary": summary,
+            "description": description,
+        },
+    }
+
+
+def main():
+    subprocess.run(
+        ["nix", "build", "--no-link", ".#nixosConfigurations.gaia-01.config.system.build.toplevel"],
+        check=True,
+    )
+    with open(rule_file_path()) as f:
+        rules = json.load(f)["groups"][0]["rules"]
+
+    units = {
+        rule["labels"]["unit"]: {
+            "severity": rule["labels"]["severity"],
+            "sliver": rule["labels"]["sliver"],
+            "unit": rule["labels"]["unit"],
+        }
+        for rule in rules
+        if rule.get("alert") == "SystemdServiceFailed"
+    }
+    missing = set(SCENARIOS) - set(units)
+    if missing:
+        raise ValueError(f"test units are absent from generated rules: {sorted(missing)}")
+
+    test_config = {
+        "rule_files": [rule_file_path()],
+        "evaluation_interval": "30s",
+        "tests": [
+            {
+                "interval": "30s",
+                "input_series": input_series(units, {}),
+                "alert_rule_test": [
+                    {"eval_time": "6m", "alertname": alert, "exp_alerts": []}
+                    for alert in ("SystemdServiceFailed", "SystemdServiceNotActive")
+                ],
+            },
+            {
+                "interval": "30s",
+                "input_series": input_series(units, SCENARIOS),
+                "alert_rule_test": [
+                    {
+                        "eval_time": "6m",
+                        "alertname": "SystemdServiceFailed",
+                        "exp_alerts": [
+                            expected_alert("etcd.service", "failed", units["etcd.service"])
+                        ],
+                    },
+                    {
+                        "eval_time": "6m",
+                        "alertname": "SystemdServiceNotActive",
+                        "exp_alerts": [
+                            expected_alert("fluent-bit.service", "inactive", units["fluent-bit.service"])
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        test_path = Path(directory) / "systemd-rules.test.yml"
+        test_path.write_text(json.dumps(test_config, indent=2) + "\n")
+        subprocess.run(["promtool", "test", "rules", str(test_path)], check=True)
+
+
+if __name__ == "__main__":
+    main()

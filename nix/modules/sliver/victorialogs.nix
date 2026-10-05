@@ -1,11 +1,20 @@
 {
   host,
+  hostInventory,
   lib,
   pkgs,
   ...
 }:
 let
   enabled = host.slivers.victorialogs.enable;
+  victorialogsHosts = lib.filter (peer: peer.slivers.victorialogs.enable) (
+    builtins.attrValues hostInventory
+  );
+  systemdServices = lib.optional (victorialogsHosts != [ ]) {
+    unit = "victorialogs.service";
+    sliver = "victorialogs";
+    severity = "warning";
+  };
   projectDisks = lib.filter (disk: disk.projects ? victorialogs) host.install.dataDisks;
   projectDefined = projectDisks != [ ];
   projectDisk = if projectDefined then lib.head projectDisks else null;
@@ -15,7 +24,10 @@ let
   listenAddress = "${host.ipam.ipv4.address}:9428";
 in
 {
-  config = lib.mkIf enabled {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf enabled {
+    jorthaus.prometheus.localSystemdServices = [ "victorialogs.service" ];
     assertions = [
       {
         assertion = lib.length projectDisks == 1;
@@ -93,5 +105,6 @@ in
         TasksMax = 256;
       };
     };
-  };
+    })
+  ];
 }

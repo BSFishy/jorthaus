@@ -7,6 +7,13 @@
 }:
 let
   enabled = host.slivers.pgbouncer.enable;
+  systemdServices = [
+    {
+      unit = "pgbouncer.service";
+      sliver = "pgbouncer";
+      severity = "critical";
+    }
+  ];
   pgbouncerPort = 6432;
   serviceAddress = "10.1.11.17";
   serviceDnsName = "pgbouncer.service.jort.haus";
@@ -18,7 +25,10 @@ let
   passwordFile = config.age.secrets.${passwordSecretName}.path;
 in
 {
-  config = lib.mkIf enabled {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf enabled {
+    jorthaus.prometheus.localSystemdServices = [ "pgbouncer.service" ];
     jorthaus.routing.loopbackAddresses = [ "${serviceAddress}/32" ];
 
     assertions = [
@@ -101,5 +111,6 @@ in
       serviceConfig.RuntimeDirectoryMode = "0700";
     };
 
-  };
+    })
+  ];
 }

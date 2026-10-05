@@ -40,6 +40,15 @@ in
 
       users.users.matt.extraGroups = [ "bird" ];
 
+      jorthaus.prometheus.systemdServices = [
+        {
+          unit = "bird.service";
+          sliver = "node";
+          severity = "warning";
+        }
+      ];
+      jorthaus.prometheus.localSystemdServices = [ "bird.service" ];
+
       systemd.services.bird = {
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];

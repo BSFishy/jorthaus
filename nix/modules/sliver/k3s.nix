@@ -17,6 +17,12 @@ let
       builtins.attrValues hostInventory
     )
   );
+  runningK3sHosts = lib.filter (peer: peer.slivers.k3s.enable) (builtins.attrValues hostInventory);
+  systemdServices = lib.optional (runningK3sHosts != [ ]) {
+    unit = "k3s.service";
+    sliver = "k3s";
+    severity = "critical";
+  };
   controlplaneHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (
       peer:
@@ -208,7 +214,10 @@ in
     };
   };
 
-  config = lib.mkIf active {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf active {
+    jorthaus.prometheus.localSystemdServices = lib.optionals enabled [ "k3s.service" ];
     assertions = [
       {
         assertion = controlplaneHosts != [ ];
@@ -505,5 +514,6 @@ in
     # manual helper or boot-time oneshot.
     # TODO: Gate advertisement of ${stableApiAddress}/32 on local k3s API
     # health so non-ready controlplanes withdraw the stable API endpoint.
-  };
+    })
+  ];
 }

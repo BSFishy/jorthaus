@@ -14,9 +14,15 @@ let
   internalApiDnsName = "openbao.service.jort.haus";
   externalApiDnsName = "openbao.jort.haus";
   certDir = config.security.acme.certs.${certName}.directory;
+  openbaoHosts = lib.filter (peer: peer.slivers.openbao.enable) (builtins.attrValues hostInventory);
   openbaoPeerHosts = lib.filter (
     peer: peer.hostname != host.hostname && peer.slivers.openbao.enable
   ) (builtins.attrValues hostInventory);
+  systemdServices = lib.optional (openbaoHosts != [ ]) {
+    unit = "openbao.service";
+    sliver = "openbao";
+    severity = "critical";
+  };
   retryJoin = map (peer: {
     leader_api_addr = "https://${peer.hostname}.node.jort.haus:8200";
   }) openbaoPeerHosts;
@@ -24,7 +30,10 @@ in
 {
   # TODO: Add a k8s job to snapshot openbao and back up the snapshot to an s3
   # bucket
-  config = lib.mkIf enabled {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf enabled {
+    jorthaus.prometheus.localSystemdServices = [ "openbao.service" ];
     users = {
       users.openbao = {
         isSystemUser = true;
@@ -122,5 +131,6 @@ in
         };
       };
     };
-  };
+    })
+  ];
 }

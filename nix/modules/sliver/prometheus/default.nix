@@ -39,6 +39,31 @@ let
   dataPath = "${projectDisk.mountpoint}/prometheus";
   statePath = "/var/lib/prometheus";
   otherAlertmanagerHosts = lib.filter (peer: peer.hostname != host.hostname) alertmanagerHosts;
+  prometheusSystemdServices =
+    lib.optional (nodeExporterHosts != [ ]) {
+      unit = "prometheus-node-exporter.service";
+      sliver = "nodeExporter";
+      severity = "warning";
+    }
+    ++ lib.optional (prometheusHosts != [ ]) {
+      unit = "prometheus.service";
+      sliver = "prometheus";
+      severity = "critical";
+    }
+    ++ lib.optional (prometheusHosts != [ ]) {
+      unit = "thanos-sidecar.service";
+      sliver = "prometheus";
+      severity = "warning";
+    }
+    ++ lib.optional (alertmanagerHosts != [ ]) {
+      unit = "alertmanager.service";
+      sliver = "alertmanager";
+      severity = "warning";
+    };
+  localPrometheusSystemdServices =
+    lib.optionals host.slivers.nodeExporter.enable [ "prometheus-node-exporter.service" ]
+    ++ lib.optionals isPrometheus [ "prometheus.service" "thanos-sidecar.service" ]
+    ++ lib.optionals isAlertmanager [ "alertmanager.service" ];
   hostTarget = peer: "${peer.ipam.ipv4.address}:9100";
   postgresTarget = peer: "${peer.ipam.ipv4.address}:9187";
   postgresBootstrapHost = if postgresHosts == [ ] then null else lib.head postgresHosts;
@@ -217,12 +242,114 @@ let
   isSeaweedfsProvisionerHost = host.hostname == seaweedfsProvisionerHost;
   seaweedfsRoleIdFile = config.age.secrets."seaweedfs-approle-role-id".path;
   seaweedfsSecretIdFile = config.age.secrets."seaweedfs-approle-secret-id".path;
+  systemdServices = config.jorthaus.prometheus.systemdServices;
+  localSystemdServices = config.jorthaus.prometheus.localSystemdServices;
+  systemdUnitInclude = "^(${
+    lib.concatStringsSep "|" (
+      map (unit: lib.replaceStrings [ "." ] [ "[.]" ] unit) localSystemdServices
+    )
+  })$";
+  systemdUnitDefinitions = lib.foldl' (
+    definitions: service:
+    if lib.any (definition: definition.unit == service.unit) definitions then
+      definitions
+    else
+      definitions ++ [ service ]
+  ) [ ] systemdServices;
+  systemdUnitDefinitionsConsistent = lib.all (
+    unit:
+    let
+      definitions = lib.filter (service: service.unit == unit) systemdServices;
+      first = lib.head definitions;
+    in
+    lib.all (
+      service: service.severity == first.severity && service.sliver == first.sliver
+    ) definitions
+  ) (map (service: service.unit) systemdUnitDefinitions);
+  systemdAlertRules = lib.concatMap (service: [
+    {
+      alert = "SystemdServiceFailed";
+      expr = ''
+        node_systemd_unit_state{
+          job="node",name="${service.unit}",state="failed"
+        } == 1
+      '';
+      for = "5m";
+      labels = {
+        inherit (service) severity sliver;
+        unit = service.unit;
+      };
+      annotations = {
+        summary = "Systemd unit {{ $labels.name }} failed on {{ $labels.host }}";
+        description = "Systemd unit {{ $labels.name }} has remained failed on {{ $labels.host }}.";
+      };
+    }
+    {
+      alert = "SystemdServiceNotActive";
+      expr = ''
+        node_systemd_unit_state{
+          job="node",name="${service.unit}",state=~"inactive|activating|deactivating"
+        } == 1
+      '';
+      for = "5m";
+      labels = {
+        inherit (service) severity sliver;
+        unit = service.unit;
+      };
+      annotations = {
+        summary = "Systemd unit {{ $labels.name }} is not active on {{ $labels.host }}";
+        description = "Systemd unit {{ $labels.name }} has remained inactive or transitional on {{ $labels.host }}.";
+      };
+    }
+  ]) systemdUnitDefinitions;
+  systemdServiceRuleFile = pkgs.writeText "jorthaus-systemd-service-alerts.yml" (
+    builtins.toJSON {
+      groups = [
+        {
+          name = "systemd-service-health";
+          rules = systemdAlertRules;
+        }
+      ];
+    }
+  );
 in
 {
   imports = [ ./s3.nix ];
 
+  options.jorthaus.prometheus.systemdServices = lib.mkOption {
+    type = lib.types.listOf (
+      lib.types.submodule {
+        options = {
+          unit = lib.mkOption {
+            type = lib.types.str;
+            description = "Expected-running systemd unit.";
+          };
+          sliver = lib.mkOption {
+            type = lib.types.str;
+            description = "Sliver or shared module that owns the unit.";
+          };
+          severity = lib.mkOption {
+            type = lib.types.enum [ "warning" "critical" ];
+            default = "critical";
+            description = "Severity for failed or inactive unit alerts.";
+          };
+        };
+      }
+    );
+    default = [ ];
+    description = "Cluster-wide expected systemd units contributed by enabled slivers and shared node modules.";
+  };
+
+  options.jorthaus.prometheus.localSystemdServices = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [ ];
+    description = "Expected systemd units contributed by enabled slivers on this host.";
+  };
+
   config = lib.mkMerge [
     {
+      jorthaus.prometheus.systemdServices = prometheusSystemdServices;
+      jorthaus.prometheus.localSystemdServices = localPrometheusSystemdServices;
       assertions = [
         {
           assertion = lib.length prometheusHosts == 2;
@@ -236,6 +363,27 @@ in
           assertion = nodeExporterHosts != [ ];
           message = "At least one node exporter must be enabled.";
         }
+        {
+          assertion = lib.all (
+            service: builtins.match "^[A-Za-z0-9_.@-]+\\.service$" service.unit != null
+          ) systemdServices;
+          message = "Monitored systemd units must be simple .service names.";
+        }
+        {
+          assertion = lib.all (
+            unit: lib.any (service: service.unit == unit) systemdServices
+          ) localSystemdServices;
+          message = "Every locally monitored systemd unit must have a cluster-wide alert definition.";
+        }
+        {
+          assertion =
+            builtins.length localSystemdServices == builtins.length (lib.unique localSystemdServices);
+          message = "A systemd unit may only be declared once per host for Prometheus scraping.";
+        }
+        {
+          assertion = systemdUnitDefinitionsConsistent;
+          message = "A systemd unit must have the same severity and owner across declarations.";
+        }
       ];
     }
 
@@ -244,6 +392,8 @@ in
         enable = true;
         listenAddress = host.ipam.ipv4.address;
         openFirewall = true;
+        enabledCollectors = [ "systemd" ];
+        extraFlags = [ "--collector.systemd.unit-include=${systemdUnitInclude}" ];
       };
     })
 
@@ -721,6 +871,7 @@ in
           }
         ];
         rules = [ (builtins.readFile ./rules.yml) ];
+        ruleFiles = [ systemdServiceRuleFile ];
       };
 
       users.groups."thanos-sidecar".members = [ "prometheus" ];

@@ -21,6 +21,18 @@ let
   valkeyHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.valkey.enable) (builtins.attrValues hostInventory)
   );
+  systemdServices = lib.optionals (valkeyHosts != [ ]) [
+    {
+      unit = "redis-valkey.service";
+      sliver = "valkey";
+      severity = "critical";
+    }
+    {
+      unit = "redis-valkey-sentinel.service";
+      sliver = "valkey";
+      severity = "critical";
+    }
+  ];
   bootstrapHost = lib.head valkeyHosts;
   sentinelQuorum = lib.min 2 (builtins.length valkeyHosts);
   valkeyPasswordFile = config.age.secrets.${valkeyPasswordSecret}.path;
@@ -47,7 +59,13 @@ let
   '';
 in
 {
-  config = lib.mkIf enabled {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf enabled {
+    jorthaus.prometheus.localSystemdServices = [
+      "redis-valkey.service"
+      "redis-valkey-sentinel.service"
+    ];
     assertions = [
       {
         assertion = valkeyHosts != [ ];
@@ -239,5 +257,6 @@ in
         "redis-valkey-sentinel.service"
       ];
     };
-  };
+    })
+  ];
 }

@@ -28,6 +28,18 @@ let
   postgresHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.postgres.enable) (builtins.attrValues hostInventory)
   );
+  systemdServices = lib.optionals (postgresHosts != [ ]) [
+    {
+      unit = "patroni.service";
+      sliver = "postgres";
+      severity = "critical";
+    }
+    {
+      unit = "prometheus-postgres-exporter.service";
+      sliver = "postgres";
+      severity = "warning";
+    }
+  ];
   etcdHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.etcd.enable) (builtins.attrValues hostInventory)
   );
@@ -79,7 +91,13 @@ let
   '';
 in
 {
-  config = lib.mkIf enabled {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf enabled {
+    jorthaus.prometheus.localSystemdServices = [
+      "patroni.service"
+      "prometheus-postgres-exporter.service"
+    ];
     assertions = [
       {
         assertion = etcdHosts != [ ];
@@ -475,5 +493,6 @@ in
         };
       };
     };
-  };
+    })
+  ];
 }

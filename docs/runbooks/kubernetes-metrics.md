@@ -5,6 +5,59 @@ host-native Prometheus pair. Prometheus on Gaia-01 and Gaia-02 keeps independent
 TSDBs and continues host scraping and local rule evaluation during a Kubernetes
 outage.
 
+## Host systemd unit health
+
+The node exporter on each Gaia host enables its systemd collector with an
+include pattern assembled from local contributions by enabled sliver and node
+modules. Host definitions select slivers and roles; each module contributes its
+unit names only in the configuration where that sliver is enabled. This keeps
+the collector limited to the 65 expected host/unit pairs across the cluster.
+Cluster-wide alert definitions contain one entry per unit name, independent of
+how many hosts run it, and retain severity and owning-sliver labels.
+
+The alert expressions match unit state directly; node-exporter adds `host` to
+each sample, and the per-host include pattern ensures only hosts that expect a
+unit report it. `SystemdServiceFailed` catches failed units, while
+`SystemdServiceNotActive` catches inactive and transitional states. If a unit
+produces no systemd metric series at all, Prometheus cannot infer that the unit
+should exist and will not alert for it. Alerts include `host`, `unit`,
+`severity`, and `sliver` labels. Node-exporter
+target availability is monitored separately. Alertmanager remains on the
+blackhole receiver until paging is configured.
+
+Verify collector success and the number of active expected units on both
+Prometheus replicas:
+
+```bash
+for h in gaia-01 gaia-02; do
+  curl -fsS --get "http://$h.node.jort.haus:9090/api/v1/query" \
+    --data-urlencode 'query=node_scrape_collector_success{collector="systemd"}' |
+    jq -r '.data.result[] | [.metric.host, .value[1]] | @tsv'
+  curl -fsS --get "http://$h.node.jort.haus:9090/api/v1/query" \
+    --data-urlencode 'query=count(node_systemd_unit_state{job="node",state="active"} == 1) by (host)' |
+    jq -r '.data.result[] | [.metric.host, .value[1]] | @tsv'
+done
+```
+
+Check that the generated alert group is loaded and has no pending or firing
+systemd alerts. `just prometheus-rules-test` checks both the static alert file
+and synthetic healthy, failed, and inactive states against the Nix-generated
+systemd rules. The missing-unit case intentionally produces no alert because it
+has no metric series:
+
+```bash
+just prometheus-rules-test
+
+for h in gaia-01 gaia-02; do
+  curl -fsS "http://$h.node.jort.haus:9090/api/v1/rules?type=alert" |
+    jq -r '.data.groups[] | select(.name == "systemd-service-health") |
+      [.name, (.rules | length)] | @tsv'
+  curl -fsS --get "http://$h.node.jort.haus:9090/api/v1/query" \
+    --data-urlencode 'query=ALERTS{alertname=~"SystemdService.*",alertstate=~"pending|firing"}' |
+    jq -r '.data.result[] | [.metric.alertname, .metric.host, .metric.unit, .metric.alertstate] | @tsv'
+done
+```
+
 ## Kubernetes object state
 
 `kube-state-metrics` runs in the `monitoring` namespace with two replicas. Its

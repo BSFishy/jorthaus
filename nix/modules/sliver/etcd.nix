@@ -17,6 +17,11 @@ let
   etcdHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.etcd.enable) (builtins.attrValues hostInventory)
   );
+  systemdServices = lib.optional (etcdHosts != [ ]) {
+    unit = "etcd.service";
+    sliver = "etcd";
+    severity = "critical";
+  };
   bootstrapHost = lib.head etcdHosts;
   initialCluster = map (
     peer: "${peer.hostname}=https://${peer.hostname}.node.jort.haus:${toString peerPort}"
@@ -55,7 +60,10 @@ in
   # TODO: etcd config kinda sucks and i dont really like running it with all
   # this extra machinery around it. currently its only used by patroni. i wanna
   # look into replacing it with consul or zookeeper or similar
-  config = lib.mkIf enabled {
+  config = lib.mkMerge [
+    { jorthaus.prometheus.systemdServices = systemdServices; }
+    (lib.mkIf enabled {
+    jorthaus.prometheus.localSystemdServices = [ "etcd.service" ];
     jorthaus.persistence.directories = [
       {
         directory = "/srv/etcd";
@@ -113,5 +121,6 @@ in
       initialClusterState = "new";
       initialClusterToken = "jorthaus-etcd";
     };
-  };
+    })
+  ];
 }
