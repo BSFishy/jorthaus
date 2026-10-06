@@ -1,0 +1,130 @@
+rule_files:
+  - rules.yml
+evaluation_interval: 30s
+tests:
+  - interval: 30s
+    input_series:
+      - series: 'jorthaus_xfs_project_quota_used_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage",project="seaweedfs"}'
+        values: '50+0x100'
+      - series: 'jorthaus_xfs_project_quota_hard_limit_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage",project="seaweedfs"}'
+        values: '100+0x100'
+      - series: 'jorthaus_xfs_project_quota_collector_success{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage"}'
+        values: '1+0x100'
+      - series: 'jorthaus_xfs_project_quota_collection_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage"}'
+        values: '1700+0x100'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: XfsProjectQuotaUsageWarning
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: XfsProjectQuotaUsageCritical
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: XfsProjectQuotaCollectionFailed
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: XfsProjectQuotaMetricsStale
+        exp_alerts: []
+  - interval: 30s
+    input_series:
+      - series: 'jorthaus_xfs_project_quota_used_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage",project="seaweedfs"}'
+        values: '85+0x100'
+      - series: 'jorthaus_xfs_project_quota_hard_limit_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage",project="seaweedfs"}'
+        values: '100+0x100'
+      - series: 'jorthaus_xfs_project_quota_collector_success{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage"}'
+        values: '1+0x100'
+      - series: 'jorthaus_xfs_project_quota_collection_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage"}'
+        values: '1700+0x100'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: XfsProjectQuotaUsageWarning
+        exp_alerts:
+          - exp_labels:
+              host: gaia-01
+              filesystem: /srv/storage
+              project: seaweedfs
+              severity: warning
+            exp_annotations:
+              summary: "XFS project quota seaweedfs is above 80% on gaia-01"
+              description: "/srv/storage project seaweedfs has remained above 80% of its hard quota for 15 minutes (85%)."
+  - interval: 30s
+    input_series:
+      - series: 'jorthaus_xfs_project_quota_used_bytes{job="node",host="gaia-02",instance="10.1.10.2:9100",filesystem="/srv/storage",project="victorialogs"}'
+        values: '95+0x100'
+      - series: 'jorthaus_xfs_project_quota_hard_limit_bytes{job="node",host="gaia-02",instance="10.1.10.2:9100",filesystem="/srv/storage",project="victorialogs"}'
+        values: '100+0x100'
+      - series: 'jorthaus_xfs_project_quota_collector_success{job="node",host="gaia-02",instance="10.1.10.2:9100",filesystem="/srv/storage"}'
+        values: '1+0x100'
+      - series: 'jorthaus_xfs_project_quota_collection_timestamp_seconds{job="node",host="gaia-02",instance="10.1.10.2:9100",filesystem="/srv/storage"}'
+        values: '1700+0x100'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: XfsProjectQuotaUsageWarning
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: XfsProjectQuotaUsageCritical
+        exp_alerts:
+          - exp_labels:
+              host: gaia-02
+              filesystem: /srv/storage
+              project: victorialogs
+              severity: critical
+            exp_annotations:
+              summary: "XFS project quota victorialogs is above 90% on gaia-02"
+              description: "/srv/storage project victorialogs has remained above 90% of its hard quota for 5 minutes (95%)."
+  - interval: 30s
+    input_series:
+      - series: 'jorthaus_xfs_project_quota_collector_success{job="node",host="gaia-03",instance="10.1.10.3:9100",filesystem="/srv/storage"}'
+        values: '0+0x100'
+      - series: 'jorthaus_xfs_project_quota_collection_timestamp_seconds{job="node",host="gaia-03",instance="10.1.10.3:9100",filesystem="/srv/storage"}'
+        values: '1700+0x100'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: XfsProjectQuotaCollectionFailed
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-03
+              instance: 10.1.10.3:9100
+              filesystem: /srv/storage
+              severity: warning
+            exp_annotations:
+              summary: "XFS project quota collection failed on gaia-03"
+              description: "The quota report for /srv/storage could not be read completely; inspect the jorthaus-xfs-quota-metrics service."
+  - interval: 30s
+    input_series:
+      - series: 'jorthaus_xfs_project_quota_collection_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage"}'
+        values: '0+0x100'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: XfsProjectQuotaMetricsStale
+        exp_alerts:
+          - exp_labels:
+              job: node
+              host: gaia-01
+              instance: 10.1.10.1:9100
+              filesystem: /srv/storage
+              severity: warning
+            exp_annotations:
+              summary: "XFS project quota metrics are stale on gaia-01"
+              description: "The last quota collection attempt for /srv/storage was more than 3 minutes ago."
+  - interval: 30s
+    input_series:
+      - series: 'jorthaus_xfs_project_quota_used_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage",project="seaweedfs"}'
+        values: '85+0x4 50+0x36'
+      - series: 'jorthaus_xfs_project_quota_hard_limit_bytes{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage",project="seaweedfs"}'
+        values: '100+0x40'
+      - series: 'jorthaus_xfs_project_quota_collector_success{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage"}'
+        values: '0+0x2 1+0x38'
+      - series: 'jorthaus_xfs_project_quota_collection_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100",filesystem="/srv/storage"}'
+        values: '0+0x2 1800+0x38'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: XfsProjectQuotaUsageWarning
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: XfsProjectQuotaCollectionFailed
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: XfsProjectQuotaMetricsStale
+        exp_alerts: []

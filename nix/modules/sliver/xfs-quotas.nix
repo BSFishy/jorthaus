@@ -16,6 +16,20 @@ let
     "jorthaus-xfs-quota-capacity-${
       lib.removePrefix "-" (lib.replaceStrings [ "/" ] [ "-" ] fileSystem)
     }";
+  metricsServiceName =
+    fileSystem:
+    "jorthaus-xfs-quota-metrics-${
+      lib.removePrefix "-" (lib.replaceStrings [ "/" ] [ "-" ] fileSystem)
+    }";
+  metricsTimerName = fileSystem: "${metricsServiceName fileSystem}.timer";
+  metricsDirectory = "/run/prometheus-node-exporter";
+  metricsCollector = pkgs.writeShellApplication {
+    name = "jorthaus-xfs-project-quota-metrics";
+    runtimeInputs = [ pkgs.python3 pkgs.xfsprogs ];
+    text = ''
+      exec ${pkgs.python3}/bin/python3 ${../../../scripts/collect-xfs-project-quota-metrics} "$@"
+    '';
+  };
   validQuota = quota: builtins.match "^[1-9][0-9]*g$" quota != null;
   quotaToBytes = quota: "$(quota_bytes ${lib.escapeShellArg quota})";
 in
@@ -58,12 +72,20 @@ in
   config = lib.mkIf (cfg.projects != { }) {
     assertions = [
       {
+        assertion = config.services.prometheus.exporters.node.enable;
+        message = "XFS project quota metrics require the node exporter on quota hosts.";
+      }
+      {
         assertion = validQuota cfg.minimumHeadroom;
         message = "The XFS project quota minimum headroom must be a positive whole GiB value with a lowercase g suffix.";
       }
       {
         assertion = lib.all (project: validQuota project.quota) projects;
         message = "XFS project quota limits must be positive whole GiB values with a lowercase g suffix.";
+      }
+      {
+        assertion = lib.all (project: builtins.match "^[A-Za-z0-9_.-]+$" project.name != null) projects;
+        message = "XFS project names must be safe Prometheus label values.";
       }
     ];
 
@@ -72,6 +94,18 @@ in
       fileSystem = project.fileSystem;
       sizeHardLimit = project.quota;
     }) cfg.projects;
+
+    services.prometheus.exporters.node = {
+      enabledCollectors = [ "textfile" ];
+      extraFlags = [ "--collector.textfile.directory=${metricsDirectory}" ];
+    };
+
+    jorthaus.prometheus.systemdServices = map (fileSystem: {
+      unit = metricsTimerName fileSystem;
+      sliver = "xfsQuota";
+      severity = "warning";
+    }) (lib.attrNames projectsByFileSystem);
+    jorthaus.prometheus.localSystemdServices = map metricsTimerName (lib.attrNames projectsByFileSystem);
 
     systemd.services =
       lib.mapAttrs' (
@@ -122,6 +156,47 @@ in
             "systemd-tmpfiles-setup.service"
           ];
         }
-      ) cfg.projects;
+      ) cfg.projects
+      // lib.mapAttrs' (
+        fileSystem: fileSystemProjects:
+        let
+          serviceName = metricsServiceName fileSystem;
+          fileSystemName = lib.removePrefix "-" (lib.replaceStrings [ "/" ] [ "-" ] fileSystem);
+          outputFile = "${metricsDirectory}/xfs-project-quota-${fileSystemName}.prom";
+          quotaUnits = map (project: "${quotaServiceName project.name}.service") fileSystemProjects;
+          projectNames = map (project: project.name) fileSystemProjects;
+        in
+        lib.nameValuePair serviceName {
+          description = "Collect XFS project quota metrics for ${fileSystem}";
+          requires = [ (mountUnitName fileSystem) "prometheus-node-exporter.service" ] ++ quotaUnits;
+          after = [
+            (mountUnitName fileSystem)
+            "prometheus-node-exporter.service"
+            "systemd-tmpfiles-setup.service"
+          ] ++ quotaUnits;
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = lib.escapeShellArgs (
+              [ "${metricsCollector}/bin/jorthaus-xfs-project-quota-metrics" fileSystem outputFile ]
+              ++ projectNames
+            );
+          };
+        }
+      ) projectsByFileSystem;
+
+    systemd.timers = lib.mapAttrs' (
+      fileSystem: _:
+      let
+        serviceName = metricsServiceName fileSystem;
+      in
+      lib.nameValuePair (metricsServiceName fileSystem) {
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "30s";
+          OnUnitActiveSec = "60s";
+          Unit = "${serviceName}.service";
+        };
+      }
+    ) projectsByFileSystem;
   };
 }

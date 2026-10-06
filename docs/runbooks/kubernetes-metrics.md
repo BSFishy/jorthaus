@@ -110,6 +110,24 @@ minutes. These checks exclude `kube-system`, `monitoring`, `traefik`,
 CPU requests provide the utilization baseline, while throttling metrics apply
 where a quota exists.
 
+## PVC and XFS project-quota capacity
+
+A PVC in the `Lost` phase is critical after 5 minutes. The existing Pending-PVC
+warning remains unchanged.
+
+The deployed SeaweedFS CSI driver does not expose per-volume usage through the
+Kubelet: the Gaia Kubelet metrics endpoints currently have no
+`kubelet_volume_stats_*` series, and driver version `v1.4.31` does not advertise
+CSI `GET_VOLUME_STATS`. Enabling a Kubelet metric allowlist alone would not
+provide PVC usage. Do not interpret absent volume metrics as either zero usage
+or a full claim; per-PVC fullness and time-to-full alerts remain deferred until
+a trustworthy source is available.
+
+Host node-exporter textfile metrics expose XFS project quota usage and hard
+limits once per minute. Usage above 80% warns after 15 minutes; usage at or
+above 90% is critical after 5 minutes. Collection failures and stale metrics
+also warn. These are per-host project-quota measurements, not per-PVC usage.
+
 ## Health checks
 
 Check the KSM replicas, service, and endpoints:

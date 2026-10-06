@@ -34,6 +34,8 @@ tests:
         values: '0+0x100'
       - series: 'kube_cronjob_spec_suspend{namespace="postgres-backup",cronjob="postgres-backup"}'
         values: '0+0x100'
+      - series: 'kube_persistentvolumeclaim_status_phase{namespace="apps",persistentvolumeclaim="healthy",phase="Bound"}'
+        values: '1+0x100'
       - series: 'kube_node_status_condition{node="gaia-01",condition="Ready",status="true"}'
         values: '1+0x100'
       - series: 'kube_node_status_condition{node="gaia-01",condition="Ready",status="false"}'
@@ -94,6 +96,9 @@ tests:
         exp_alerts: []
       - eval_time: 45m
         alertname: KubernetesNodePressure
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesPersistentVolumeClaimLost
         exp_alerts: []
   - interval: 30s
     input_series:
@@ -174,6 +179,8 @@ tests:
       - series: 'kube_cronjob_status_active{namespace="default",cronjob="suspended"}'
         values: '0+0x100'
       - series: 'kube_cronjob_spec_suspend{namespace="default",cronjob="suspended"}'
+        values: '1+0x100'
+      - series: 'kube_persistentvolumeclaim_status_phase{namespace="apps",persistentvolumeclaim="lost-claim",phase="Lost"}'
         values: '1+0x100'
       - series: 'kube_node_status_condition{node="gaia-01",condition="Ready",status="false"}'
         values: '1+0x100'
@@ -364,3 +371,22 @@ tests:
             exp_annotations:
               summary: "Kubernetes node gaia-01 has DiskPressure"
               description: "The node condition DiskPressure has remained true for more than 10 minutes."
+      - eval_time: 45m
+        alertname: KubernetesPersistentVolumeClaimLost
+        exp_alerts:
+          - exp_labels:
+              namespace: apps
+              persistentvolumeclaim: lost-claim
+              phase: Lost
+              severity: critical
+            exp_annotations:
+              summary: "PVC apps/lost-claim is Lost"
+              description: "The claim has remained in the Lost phase for more than 5 minutes."
+  - interval: 30s
+    input_series:
+      - series: 'kube_persistentvolumeclaim_status_phase{namespace="apps",persistentvolumeclaim="recovered-claim",phase="Lost"}'
+        values: '1+0x10 0+0x50'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: KubernetesPersistentVolumeClaimLost
+        exp_alerts: []

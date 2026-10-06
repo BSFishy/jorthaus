@@ -353,6 +353,14 @@ groups:
         annotations:
           summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is pending"
           description: "The claim has remained pending for more than 10 minutes."
+      - alert: KubernetesPersistentVolumeClaimLost
+        expr: kube_persistentvolumeclaim_status_phase{phase="Lost"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is Lost"
+          description: "The claim has remained in the Lost phase for more than 5 minutes."
   - name: kubernetes-container-resources
     rules:
       - record: container_cpu_request_utilization:ratio
@@ -550,3 +558,45 @@ groups:
         annotations:
           summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} has no memory request or limit"
           description: "Memory usage cannot be compared with a declared request or limit on node {{ $labels.node }}."
+  - name: xfs-project-quota-health
+    rules:
+      - record: jorthaus_xfs_project_quota_utilization:ratio
+        expr: |
+          jorthaus_xfs_project_quota_used_bytes{job="node"}
+          /
+          on (host, filesystem, project)
+          (jorthaus_xfs_project_quota_hard_limit_bytes{job="node"} > 0)
+      - alert: XfsProjectQuotaUsageWarning
+        expr: |
+          jorthaus_xfs_project_quota_utilization:ratio > 0.8
+          and jorthaus_xfs_project_quota_utilization:ratio < 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XFS project quota {{ $labels.project }} is above 80% on {{ $labels.host }}"
+          description: "{{ $labels.filesystem }} project {{ $labels.project }} has remained above 80% of its hard quota for 15 minutes ({{ $value | humanizePercentage }})."
+      - alert: XfsProjectQuotaUsageCritical
+        expr: jorthaus_xfs_project_quota_utilization:ratio >= 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "XFS project quota {{ $labels.project }} is above 90% on {{ $labels.host }}"
+          description: "{{ $labels.filesystem }} project {{ $labels.project }} has remained above 90% of its hard quota for 5 minutes ({{ $value | humanizePercentage }})."
+      - alert: XfsProjectQuotaCollectionFailed
+        expr: jorthaus_xfs_project_quota_collector_success{job="node"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XFS project quota collection failed on {{ $labels.host }}"
+          description: "The quota report for {{ $labels.filesystem }} could not be read completely; inspect the jorthaus-xfs-quota-metrics service."
+      - alert: XfsProjectQuotaMetricsStale
+        expr: time() - jorthaus_xfs_project_quota_collection_timestamp_seconds{job="node"} > 180
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XFS project quota metrics are stale on {{ $labels.host }}"
+          description: "The last quota collection attempt for {{ $labels.filesystem }} was more than 3 minutes ago."

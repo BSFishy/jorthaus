@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+COLLECTOR = ROOT / "scripts" / "collect-xfs-project-quota-metrics"
+REPORT = """#0 244744 0 0 00 [--------]
+seaweedfs 72035620 0 1677721600 00 [--------]
+victorialogs 316108 0 104857600 00 [--------]
+prometheus 1592656 0 26214400 00 [--------]
+"""
+
+
+def run_collector(report, status=0, projects=("seaweedfs", "victorialogs")):
+    with tempfile.TemporaryDirectory() as temporary:
+        temp = Path(temporary)
+        fake_bin = temp / "bin"
+        fake_bin.mkdir()
+        fake_xfs_quota = fake_bin / "xfs_quota"
+        fake_xfs_quota.write_text(
+            "#!/bin/sh\n"
+            "if [ \"${XFS_QUOTA_STATUS:-0}\" -ne 0 ]; then exit \"$XFS_QUOTA_STATUS\"; fi\n"
+            "printf '%s\\n' \"$XFS_QUOTA_REPORT\"\n"
+        )
+        fake_xfs_quota.chmod(0o755)
+        output = temp / "xfs-quota.prom"
+        environment = os.environ | {
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "XFS_QUOTA_REPORT": report,
+            "XFS_QUOTA_STATUS": str(status),
+        }
+        result = subprocess.run(
+            [sys.executable, str(COLLECTOR), "/srv/storage", str(output), *projects],
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        return result, output.read_text() if output.exists() else ""
+
+
+def assert_contains(text, expected):
+    if expected not in text:
+        raise AssertionError(f"expected {expected!r} in output:\n{text}")
+
+
+def test_success_converts_report_blocks_to_bytes():
+    result, output = run_collector(REPORT)
+    assert result.returncode == 0, result.stderr
+    assert_contains(output, 'jorthaus_xfs_project_quota_used_bytes{filesystem="/srv/storage",project="seaweedfs"} 73764474880')
+    assert_contains(output, 'jorthaus_xfs_project_quota_hard_limit_bytes{filesystem="/srv/storage",project="seaweedfs"} 1717986918400')
+    assert_contains(output, 'jorthaus_xfs_project_quota_collector_success{filesystem="/srv/storage"} 1')
+    assert 'project="prometheus"' not in output
+
+
+def test_missing_project_emits_only_failure_metric():
+    result, output = run_collector("seaweedfs 10 0 20 00 [--------]\n")
+    assert result.returncode == 1
+    assert_contains(output, 'jorthaus_xfs_project_quota_collector_success{filesystem="/srv/storage"} 0')
+    assert "jorthaus_xfs_project_quota_used_bytes{" not in output
+
+
+def test_command_failure_replaces_stale_metrics():
+    result, output = run_collector(REPORT, status=1)
+    assert result.returncode == 1
+    assert_contains(output, 'jorthaus_xfs_project_quota_collector_success{filesystem="/srv/storage"} 0')
+    assert "jorthaus_xfs_project_quota_used_bytes{" not in output
+
+
+def test_invalid_or_duplicate_rows_fail_closed():
+    for report in (
+        "seaweedfs not-a-number 0 100 00 [--------]\n",
+        "seaweedfs 10 0 100 00 [--------]\nseaweedfs 11 0 100 00 [--------]\n",
+    ):
+        result, output = run_collector(report, projects=("seaweedfs",))
+        assert result.returncode == 1
+        assert_contains(output, 'jorthaus_xfs_project_quota_collector_success{filesystem="/srv/storage"} 0')
+        assert "jorthaus_xfs_project_quota_used_bytes{" not in output
+
+
+def main():
+    tests = [
+        test_success_converts_report_blocks_to_bytes,
+        test_missing_project_emits_only_failure_metric,
+        test_command_failure_replaces_stale_metrics,
+        test_invalid_or_duplicate_rows_fail_closed,
+    ]
+    for test in tests:
+        test()
+        print(f"PASS {test.__name__}")
+
+
+if __name__ == "__main__":
+    main()

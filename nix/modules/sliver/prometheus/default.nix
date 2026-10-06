@@ -186,6 +186,9 @@ let
       "process_resident_memory_bytes"
     ]
     + ")$";
+  # TODO: Retain kubelet_volume_stats_* here after SeaweedFS CSI implements
+  # and advertises GET_VOLUME_STATS; verify PVC labels before adding
+  # claim-capacity rules.
   kubeletMetricAllowlist =
     "^("
     + lib.concatStringsSep "|" [
@@ -366,9 +369,9 @@ in
         }
         {
           assertion = lib.all (
-            service: builtins.match "^[A-Za-z0-9_.@-]+\\.service$" service.unit != null
+            service: builtins.match "^[A-Za-z0-9_.@-]+\\.(service|timer)$" service.unit != null
           ) systemdServices;
-          message = "Monitored systemd units must be simple .service names.";
+          message = "Monitored systemd units must be simple .service or .timer names.";
         }
         {
           assertion = lib.all (
