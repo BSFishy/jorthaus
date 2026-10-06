@@ -353,3 +353,200 @@ groups:
         annotations:
           summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is pending"
           description: "The claim has remained pending for more than 10 minutes."
+  - name: kubernetes-container-resources
+    rules:
+      - record: container_cpu_request_utilization:ratio
+        expr: |
+          sum by (namespace, pod, container, node) (
+            label_replace(
+              rate(container_cpu_usage_seconds_total{job="kubelet-cadvisor",namespace!="",pod!="",container!="",host!=""}[5m]),
+              "node", "$1", "host", "(.+)"
+            )
+          )
+          /
+          on (namespace, pod, container, node)
+          max by (namespace, pod, container, node) (
+            kube_pod_container_resource_requests{job="kube-state-metrics",resource="cpu",unit="core"} > 0
+          )
+      - record: container_cpu_throttled_periods:rate5m
+        expr: |
+          sum by (namespace, pod, container, node) (
+            label_replace(
+              rate(container_cpu_cfs_throttled_periods_total{job="kubelet-cadvisor",namespace!="",pod!="",container!="",host!=""}[5m]),
+              "node", "$1", "host", "(.+)"
+            )
+          )
+      - record: container_cpu_periods:rate5m
+        expr: |
+          sum by (namespace, pod, container, node) (
+            label_replace(
+              rate(container_cpu_cfs_periods_total{job="kubelet-cadvisor",namespace!="",pod!="",container!="",host!=""}[5m]),
+              "node", "$1", "host", "(.+)"
+            )
+          )
+      - record: container_cpu_throttled_periods:ratio5m
+        expr: |
+          container_cpu_throttled_periods:rate5m
+          /
+          on (namespace, pod, container, node)
+          container_cpu_periods:rate5m
+      - record: container_memory_limit_utilization:ratio
+        expr: |
+          sum by (namespace, pod, container, node) (
+            label_replace(
+              container_memory_working_set_bytes{job="kubelet-cadvisor",namespace!="",pod!="",container!="",host!=""},
+              "node", "$1", "host", "(.+)"
+            )
+          )
+          /
+          on (namespace, pod, container, node)
+          max by (namespace, pod, container, node) (
+            kube_pod_container_resource_limits{job="kube-state-metrics",resource="memory",unit="byte"} > 0
+          )
+      - record: container_memory_request_utilization:ratio
+        expr: |
+          (
+            sum by (namespace, pod, container, node) (
+              label_replace(
+                container_memory_working_set_bytes{job="kubelet-cadvisor",namespace!="",pod!="",container!="",host!=""},
+                "node", "$1", "host", "(.+)"
+              )
+            )
+            /
+            on (namespace, pod, container, node)
+            max by (namespace, pod, container, node) (
+              kube_pod_container_resource_requests{job="kube-state-metrics",resource="memory",unit="byte"} > 0
+            )
+          )
+          unless on (namespace, pod, container, node)
+          max by (namespace, pod, container, node) (
+            kube_pod_container_resource_limits{job="kube-state-metrics",resource="memory",unit="byte"} > 0
+          )
+      - record: container_oom_events:increase5m
+        expr: |
+          sum by (namespace, pod, container, node) (
+            label_replace(
+              increase(container_oom_events_total{job="kubelet-cadvisor",namespace!="",pod!="",container!="",host!=""}[5m]),
+              "node", "$1", "host", "(.+)"
+            )
+          )
+      - record: kube_pod_container_info_by_node:info
+        expr: |
+          max by (namespace, pod, container, node) (
+            kube_pod_container_info{job="kube-state-metrics",namespace!~"kube-system|monitoring|traefik|postgres-backup"}
+            * on (namespace, pod) group_left (node)
+            kube_pod_info{job="kube-state-metrics",node!=""}
+          )
+      - record: kube_pod_container_cpu_budget_missing:info
+        expr: |
+          (
+            kube_pod_container_info_by_node:info
+            unless on (namespace, pod, container, node)
+            max by (namespace, pod, container, node) (
+              kube_pod_container_resource_requests{job="kube-state-metrics",resource="cpu",unit="core"}
+              or on (namespace, pod, container, node)
+              kube_pod_container_resource_limits{job="kube-state-metrics",resource="cpu",unit="core"}
+            )
+          )
+          unless on (namespace, pod)
+          (kube_pod_owner{job="kube-state-metrics",owner_kind="Job"} == 1)
+      - record: kube_pod_container_memory_budget_missing:info
+        expr: |
+          (
+            kube_pod_container_info_by_node:info
+            unless on (namespace, pod, container, node)
+            max by (namespace, pod, container, node) (
+              kube_pod_container_resource_requests{job="kube-state-metrics",resource="memory",unit="byte"}
+              or on (namespace, pod, container, node)
+              kube_pod_container_resource_limits{job="kube-state-metrics",resource="memory",unit="byte"}
+            )
+          )
+          unless on (namespace, pod)
+          (kube_pod_owner{job="kube-state-metrics",owner_kind="Job"} == 1)
+      - alert: KubernetesContainerCpuAboveRequest
+        expr: container_cpu_request_utilization:ratio > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} uses over twice its CPU request"
+          description: "CPU use has remained above 2x the request for 15 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerCpuThrottlingWarning
+        expr: |
+          container_cpu_throttled_periods:ratio5m >= 0.25
+          and container_cpu_throttled_periods:ratio5m < 0.5
+          and on (namespace, pod, container, node) container_cpu_periods:rate5m > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is CPU-throttled"
+          description: "At least 25% of CPU enforcement periods have been throttled for 15 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerCpuThrottlingCritical
+        expr: |
+          container_cpu_throttled_periods:ratio5m >= 0.5
+          and on (namespace, pod, container, node) container_cpu_periods:rate5m > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is severely CPU-throttled"
+          description: "At least 50% of CPU enforcement periods have been throttled for 5 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerMemoryNearLimit
+        expr: |
+          container_memory_limit_utilization:ratio > 0.8
+          and container_memory_limit_utilization:ratio < 0.95
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is near its memory limit"
+          description: "Working set has remained above 80% of its memory limit for 15 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerMemoryLimitCritical
+        expr: container_memory_limit_utilization:ratio >= 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is near its memory limit"
+          description: "Working set has remained above 95% of its memory limit for 5 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerMemoryAboveRequest
+        expr: container_memory_request_utilization:ratio > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unbounded container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} exceeds twice its memory request"
+          description: "Working set has remained above 2x its memory request, with no memory limit set, for 15 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerOomWarning
+        expr: container_oom_events:increase5m{namespace!~"kube-system|monitoring|thanos|authentik|postgres-backup"} > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} had an OOM event"
+          description: "An out-of-memory event was recorded in the last 5 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerOomCritical
+        expr: container_oom_events:increase5m{namespace=~"kube-system|monitoring|thanos|authentik|postgres-backup"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Core container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} had an OOM event"
+          description: "An out-of-memory event was recorded in the last 5 minutes on node {{ $labels.node }}."
+      - alert: KubernetesContainerCpuBudgetMissing
+        expr: kube_pod_container_cpu_budget_missing:info
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} has no CPU request or limit"
+          description: "CPU usage cannot be compared with a declared request or limit on node {{ $labels.node }}."
+      - alert: KubernetesContainerMemoryBudgetMissing
+        expr: kube_pod_container_memory_budget_missing:info
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} has no memory request or limit"
+          description: "Memory usage cannot be compared with a declared request or limit on node {{ $labels.node }}."

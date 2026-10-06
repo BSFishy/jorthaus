@@ -210,6 +210,7 @@ let
     "^("
     + lib.concatStringsSep "|" [
       "container_cpu_usage_seconds_total"
+      "container_cpu_cfs_periods_total"
       "container_cpu_cfs_throttled_periods_total"
       "container_cpu_cfs_throttled_seconds_total"
       "container_memory_working_set_bytes"

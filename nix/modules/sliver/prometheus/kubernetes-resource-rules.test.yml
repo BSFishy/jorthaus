@@ -1,0 +1,257 @@
+rule_files:
+  - rules.yml
+evaluation_interval: 30s
+tests:
+  - interval: 30s
+    input_series:
+      - series: 'container_cpu_usage_seconds_total{job="kubelet-cadvisor",namespace="home-assistant",pod="healthy",container="app",host="gaia-01"}'
+        values: '0+0.01x100'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics",namespace="home-assistant",pod="healthy",container="app",node="gaia-01",resource="cpu",unit="core"}'
+        values: '0.1+0x100'
+      - series: 'container_cpu_cfs_throttled_periods_total{job="kubelet-cadvisor",namespace="home-assistant",pod="healthy",container="app",host="gaia-01"}'
+        values: '0+0x100'
+      - series: 'container_cpu_cfs_periods_total{job="kubelet-cadvisor",namespace="home-assistant",pod="healthy",container="app",host="gaia-01"}'
+        values: '0+100x100'
+      - series: 'container_memory_working_set_bytes{job="kubelet-cadvisor",namespace="home-assistant",pod="healthy",container="app",host="gaia-01"}'
+        values: '75+0x100'
+      - series: 'kube_pod_container_resource_limits{job="kube-state-metrics",namespace="home-assistant",pod="healthy",container="app",node="gaia-01",resource="memory",unit="byte"}'
+        values: '100+0x100'
+      - series: 'container_oom_events_total{job="kubelet-cadvisor",namespace="home-assistant",pod="healthy",container="app",host="gaia-01"}'
+        values: '0+0x100'
+      - series: 'container_memory_working_set_bytes{job="kubelet-cadvisor",namespace="hister",pod="unbounded",container="app",host="gaia-02"}'
+        values: '150+0x100'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics",namespace="hister",pod="unbounded",container="app",node="gaia-02",resource="memory",unit="byte"}'
+        values: '100+0x100'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuAboveRequest
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuThrottlingWarning
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuThrottlingCritical
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryNearLimit
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryLimitCritical
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryAboveRequest
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerOomWarning
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerOomCritical
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuBudgetMissing
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryBudgetMissing
+        exp_alerts: []
+  - interval: 30s
+    input_series:
+      - series: 'container_cpu_usage_seconds_total{job="kubelet-cadvisor",namespace="hister",pod="web",container="app",host="gaia-01"}'
+        values: '0+6x100'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics",namespace="hister",pod="web",container="app",node="gaia-01",resource="cpu",unit="core"}'
+        values: '0.05+0x100'
+      - series: 'container_cpu_cfs_throttled_periods_total{job="kubelet-cadvisor",namespace="hister",pod="throttled-warning",container="app",host="gaia-02"}'
+        values: '0+40x100'
+      - series: 'container_cpu_cfs_periods_total{job="kubelet-cadvisor",namespace="hister",pod="throttled-warning",container="app",host="gaia-02"}'
+        values: '0+100x100'
+      - series: 'container_cpu_cfs_throttled_periods_total{job="kubelet-cadvisor",namespace="authentik",pod="throttled-critical",container="app",host="gaia-03"}'
+        values: '0+60x100'
+      - series: 'container_cpu_cfs_periods_total{job="kubelet-cadvisor",namespace="authentik",pod="throttled-critical",container="app",host="gaia-03"}'
+        values: '0+100x100'
+      - series: 'container_memory_working_set_bytes{job="kubelet-cadvisor",namespace="hister",pod="memory-warning",container="app",host="gaia-01"}'
+        values: '90+0x100'
+      - series: 'kube_pod_container_resource_limits{job="kube-state-metrics",namespace="hister",pod="memory-warning",container="app",node="gaia-01",resource="memory",unit="byte"}'
+        values: '100+0x100'
+      - series: 'container_memory_working_set_bytes{job="kubelet-cadvisor",namespace="authentik",pod="memory-critical",container="app",host="gaia-02"}'
+        values: '196+0x100'
+      - series: 'kube_pod_container_resource_limits{job="kube-state-metrics",namespace="authentik",pod="memory-critical",container="app",node="gaia-02",resource="memory",unit="byte"}'
+        values: '200+0x100'
+      - series: 'container_memory_working_set_bytes{job="kubelet-cadvisor",namespace="hister",pod="unbounded",container="app",host="gaia-02"}'
+        values: '250+0x100'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics",namespace="hister",pod="unbounded",container="app",node="gaia-02",resource="memory",unit="byte"}'
+        values: '100+0x100'
+      - series: 'container_oom_events_total{job="kubelet-cadvisor",namespace="hister",pod="oom-warning",container="app",host="gaia-02"}'
+        values: '0+1x100'
+      - series: 'container_oom_events_total{job="kubelet-cadvisor",namespace="authentik",pod="oom-critical",container="app",host="gaia-03"}'
+        values: '0+1x100'
+      - series: 'kube_pod_container_info{job="kube-state-metrics",namespace="forgejo",pod="forgejo",container="app"}'
+        values: '1+0x100'
+      - series: 'kube_pod_info{job="kube-state-metrics",namespace="forgejo",pod="forgejo",node="gaia-04"}'
+        values: '1+0x100'
+      - series: 'kube_pod_container_info{job="kube-state-metrics",namespace="kube-system",pod="system-app",container="agent"}'
+        values: '1+0x100'
+      - series: 'kube_pod_info{job="kube-state-metrics",namespace="kube-system",pod="system-app",node="gaia-01"}'
+        values: '1+0x100'
+      - series: 'kube_pod_container_info{job="kube-state-metrics",namespace="hister",pod="job-pod",container="task"}'
+        values: '1+0x100'
+      - series: 'kube_pod_info{job="kube-state-metrics",namespace="hister",pod="job-pod",node="gaia-02"}'
+        values: '1+0x100'
+      - series: 'kube_pod_owner{job="kube-state-metrics",namespace="hister",pod="job-pod",owner_kind="Job"}'
+        values: '1+0x100'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuAboveRequest
+        exp_alerts:
+          - exp_labels:
+              namespace: hister
+              pod: web
+              container: app
+              node: gaia-01
+              severity: warning
+            exp_annotations:
+              summary: "Container hister/web/app uses over twice its CPU request"
+              description: "CPU use has remained above 2x the request for 15 minutes on node gaia-01."
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuThrottlingWarning
+        exp_alerts:
+          - exp_labels:
+              namespace: hister
+              pod: throttled-warning
+              container: app
+              node: gaia-02
+              severity: warning
+            exp_annotations:
+              summary: "Container hister/throttled-warning/app is CPU-throttled"
+              description: "At least 25% of CPU enforcement periods have been throttled for 15 minutes on node gaia-02."
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuThrottlingCritical
+        exp_alerts:
+          - exp_labels:
+              namespace: authentik
+              pod: throttled-critical
+              container: app
+              node: gaia-03
+              severity: critical
+            exp_annotations:
+              summary: "Container authentik/throttled-critical/app is severely CPU-throttled"
+              description: "At least 50% of CPU enforcement periods have been throttled for 5 minutes on node gaia-03."
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryNearLimit
+        exp_alerts:
+          - exp_labels:
+              namespace: hister
+              pod: memory-warning
+              container: app
+              node: gaia-01
+              severity: warning
+            exp_annotations:
+              summary: "Container hister/memory-warning/app is near its memory limit"
+              description: "Working set has remained above 80% of its memory limit for 15 minutes on node gaia-01."
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryLimitCritical
+        exp_alerts:
+          - exp_labels:
+              namespace: authentik
+              pod: memory-critical
+              container: app
+              node: gaia-02
+              severity: critical
+            exp_annotations:
+              summary: "Container authentik/memory-critical/app is near its memory limit"
+              description: "Working set has remained above 95% of its memory limit for 5 minutes on node gaia-02."
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryAboveRequest
+        exp_alerts:
+          - exp_labels:
+              namespace: hister
+              pod: unbounded
+              container: app
+              node: gaia-02
+              severity: warning
+            exp_annotations:
+              summary: "Unbounded container hister/unbounded/app exceeds twice its memory request"
+              description: "Working set has remained above 2x its memory request, with no memory limit set, for 15 minutes on node gaia-02."
+      - eval_time: 45m
+        alertname: KubernetesContainerOomWarning
+        exp_alerts:
+          - exp_labels:
+              namespace: hister
+              pod: oom-warning
+              container: app
+              node: gaia-02
+              severity: warning
+            exp_annotations:
+              summary: "Container hister/oom-warning/app had an OOM event"
+              description: "An out-of-memory event was recorded in the last 5 minutes on node gaia-02."
+      - eval_time: 45m
+        alertname: KubernetesContainerOomCritical
+        exp_alerts:
+          - exp_labels:
+              namespace: authentik
+              pod: oom-critical
+              container: app
+              node: gaia-03
+              severity: critical
+            exp_annotations:
+              summary: "Core container authentik/oom-critical/app had an OOM event"
+              description: "An out-of-memory event was recorded in the last 5 minutes on node gaia-03."
+      - eval_time: 45m
+        alertname: KubernetesContainerCpuBudgetMissing
+        exp_alerts:
+          - exp_labels:
+              namespace: forgejo
+              pod: forgejo
+              container: app
+              node: gaia-04
+              severity: warning
+            exp_annotations:
+              summary: "Container forgejo/forgejo/app has no CPU request or limit"
+              description: "CPU usage cannot be compared with a declared request or limit on node gaia-04."
+      - eval_time: 45m
+        alertname: KubernetesContainerMemoryBudgetMissing
+        exp_alerts:
+          - exp_labels:
+              namespace: forgejo
+              pod: forgejo
+              container: app
+              node: gaia-04
+              severity: warning
+            exp_annotations:
+              summary: "Container forgejo/forgejo/app has no memory request or limit"
+              description: "Memory usage cannot be compared with a declared request or limit on node gaia-04."
+  - interval: 30s
+    input_series:
+      - series: 'container_cpu_usage_seconds_total{job="kubelet-cadvisor",namespace="hister",pod="brief-cpu",container="app",host="gaia-01"}'
+        values: '0+6x10 60+0x50'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics",namespace="hister",pod="brief-cpu",container="app",node="gaia-01",resource="cpu",unit="core"}'
+        values: '0.05+0x60'
+      - series: 'container_cpu_cfs_throttled_periods_total{job="kubelet-cadvisor",namespace="hister",pod="brief-throttle",container="app",host="gaia-02"}'
+        values: '0+40x10 400+0x50'
+      - series: 'container_cpu_cfs_periods_total{job="kubelet-cadvisor",namespace="hister",pod="brief-throttle",container="app",host="gaia-02"}'
+        values: '0+100x60'
+      - series: 'container_memory_working_set_bytes{job="kubelet-cadvisor",namespace="hister",pod="brief-memory",container="app",host="gaia-03"}'
+        values: '90+0x10 70+0x50'
+      - series: 'kube_pod_container_resource_limits{job="kube-state-metrics",namespace="hister",pod="brief-memory",container="app",node="gaia-03",resource="memory",unit="byte"}'
+        values: '100+0x60'
+      - series: 'container_memory_working_set_bytes{job="kubelet-cadvisor",namespace="hister",pod="brief-unbounded",container="app",host="gaia-04"}'
+        values: '250+0x10 150+0x50'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics",namespace="hister",pod="brief-unbounded",container="app",node="gaia-04",resource="memory",unit="byte"}'
+        values: '100+0x60'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: KubernetesContainerCpuAboveRequest
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: KubernetesContainerCpuThrottlingWarning
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: KubernetesContainerCpuThrottlingCritical
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: KubernetesContainerMemoryNearLimit
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: KubernetesContainerMemoryLimitCritical
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: KubernetesContainerMemoryAboveRequest
+        exp_alerts: []

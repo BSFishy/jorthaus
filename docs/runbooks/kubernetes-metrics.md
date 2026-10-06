@@ -86,6 +86,30 @@ alerts rather than duplicated Pod failure, waiting, or restart alerts. The
 remaining Pod-level alerts use 5- or 10-minute hold times to filter brief
 rollout and scheduling transitions.
 
+## Kubernetes container resources
+
+Host CPU and memory pressure continues to use the node-exporter alerts in the
+`node-health` group; those rules already cover every Gaia node, so this phase
+adds no duplicate Kubernetes-node utilization alerts. Container resource rules
+use cAdvisor metrics joined with KSM requests and limits by namespace, Pod,
+container, and node.
+
+CPU use above twice the declared request warns after 15 minutes. CPU throttling
+warns when at least 25% of enforcement periods are throttled for 15 minutes and
+is critical at 50% for 5 minutes. Memory usage above 80% of a declared limit
+warns after 15 minutes; above 95% is critical after 5 minutes. When a memory
+limit is absent but a request exists, usage above twice the request warns after
+15 minutes. New OOM events alert within about a minute; they are critical in
+`kube-system`, `monitoring`, `thanos`, `authentik`, and `postgres-backup`, and
+warnings elsewhere.
+
+Long-running application containers with neither a CPU request nor limit, or
+neither a memory request nor limit, receive separate coverage warnings after 30
+minutes. These checks exclude `kube-system`, `monitoring`, `traefik`,
+`postgres-backup`, and Job-owned Pods. Missing CPU limits alone are not flagged:
+CPU requests provide the utilization baseline, while throttling metrics apply
+where a quota exists.
+
 ## Health checks
 
 Check the KSM replicas, service, and endpoints:
