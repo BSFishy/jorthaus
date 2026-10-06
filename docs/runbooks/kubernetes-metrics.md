@@ -72,7 +72,19 @@ collectors are disabled, and metric label and annotation allowlists remain
 empty. The pod uses its projected ServiceAccount token to watch Kubernetes
 objects; the host Prometheus does not receive that token. Prometheus alerts when
 the KSM target stays down, a deployment has unavailable replicas, or a PVC
-remains pending for 10 minutes.
+remains pending for 10 minutes. Object-health rules also cover StatefulSet and
+DaemonSet availability, sustained unhealthy Pods and containers, failed Jobs,
+missed CronJob schedules, and Kubernetes node readiness and pressure.
+
+Partial workload availability is warning-level after 10 minutes. Zero available
+replicas for core workloads in `kube-system`, `monitoring`, `thanos`,
+`authentik`, or `postgres-backup` is critical after 5 minutes. Failed PostgreSQL
+backup Jobs and missed PostgreSQL backup schedules are critical; other failed
+Jobs and missed schedules are warnings. CronJobs are considered overdue 30
+minutes after their next scheduled time. Job-owned Pods are handled by Job
+alerts rather than duplicated Pod failure, waiting, or restart alerts. The
+remaining Pod-level alerts use 5- or 10-minute hold times to filter brief
+rollout and scheduling transitions.
 
 ## Health checks
 
@@ -108,7 +120,20 @@ done
 The NixOS Prometheus configuration defines the `kube-state-metrics` scrape
 job. Check both replicas' active targets and query KSM metrics through the
 internal Thanos Query or the local Prometheus API. The public Thanos query
-endpoint remains protected by Authentik.
+endpoint remains protected by Authentik. Verify that both local Prometheus
+instances have evaluated the object-health group and have no unexpected active
+alerts:
+
+```bash
+for h in gaia-01 gaia-02; do
+  curl -fsS "http://$h.node.jort.haus:9090/api/v1/rules?type=alert" |
+    jq -r '.data.groups[] | select(.name == "kubernetes-object-health") |
+      [.name, (.rules | length), ([.rules[] | select(.health != "ok" or .lastError != null)] | length), .lastEvaluation] | @tsv'
+  curl -fsS --get "http://$h.node.jort.haus:9090/api/v1/query" \
+    --data-urlencode 'query=ALERTS{alertname=~"Kubernetes.*",alertstate=~"pending|firing"}' |
+    jq -r '.data.result[] | [.metric.alertname, .metric.alertstate, .metric.namespace, .metric.pod] | @tsv'
+done
+```
 
 ## Kubelet and cAdvisor metrics
 

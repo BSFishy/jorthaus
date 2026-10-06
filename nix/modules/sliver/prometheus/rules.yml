@@ -153,13 +153,198 @@ groups:
   - name: kubernetes-object-health
     rules:
       - alert: KubernetesDeploymentReplicasUnavailable
-        expr: kube_deployment_status_replicas_unavailable > 0
+        expr: |
+          (
+            kube_deployment_status_replicas_unavailable > 0
+            and on (namespace, deployment) kube_deployment_spec_replicas > 0
+          )
+          unless on (namespace, deployment)
+          (
+            kube_deployment_status_replicas_available{namespace=~"kube-system|monitoring|thanos|authentik|postgres-backup"} == 0
+            and on (namespace, deployment) kube_deployment_spec_replicas > 0
+          )
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has unavailable replicas"
           description: "The deployment has had unavailable replicas for more than 10 minutes."
+      - alert: KubernetesDeploymentUnavailableCritical
+        expr: |
+          kube_deployment_status_replicas_available{namespace=~"kube-system|monitoring|thanos|authentik|postgres-backup"} == 0
+          and on (namespace, deployment) kube_deployment_spec_replicas > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has no available replicas"
+          description: "The core deployment has had zero available replicas for more than 5 minutes."
+      - alert: KubernetesStatefulSetReplicasUnavailable
+        expr: |
+          (
+            kube_statefulset_status_replicas_ready
+            < on (namespace, statefulset) kube_statefulset_replicas
+          )
+          unless on (namespace, statefulset)
+          (
+            kube_statefulset_status_replicas_ready{namespace=~"kube-system|monitoring|thanos|authentik|postgres-backup"} == 0
+            and on (namespace, statefulset) kube_statefulset_replicas > 0
+          )
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} has unavailable replicas"
+          description: "The StatefulSet has had fewer ready replicas than desired for more than 10 minutes."
+      - alert: KubernetesStatefulSetUnavailableCritical
+        expr: |
+          kube_statefulset_status_replicas_ready{namespace=~"kube-system|monitoring|thanos|authentik|postgres-backup"} == 0
+          and on (namespace, statefulset) kube_statefulset_replicas > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} has no ready replicas"
+          description: "The core StatefulSet has had zero ready replicas for more than 5 minutes."
+      - alert: KubernetesDaemonSetUnavailable
+        expr: |
+          kube_daemonset_status_number_unavailable > 0
+          unless on (namespace, daemonset)
+          (
+            kube_daemonset_status_number_unavailable{namespace="kube-system"}
+            >= on (namespace, daemonset) kube_daemonset_status_desired_number_scheduled{namespace="kube-system"}
+            and on (namespace, daemonset) kube_daemonset_status_desired_number_scheduled{namespace="kube-system"} > 0
+          )
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} has unavailable Pods"
+          description: "The DaemonSet has had unavailable Pods for more than 10 minutes."
+      - alert: KubernetesDaemonSetUnavailableCritical
+        expr: |
+          kube_daemonset_status_number_unavailable{namespace="kube-system"}
+          >= on (namespace, daemonset) kube_daemonset_status_desired_number_scheduled{namespace="kube-system"}
+          and on (namespace, daemonset) kube_daemonset_status_desired_number_scheduled{namespace="kube-system"} > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} has no available Pods"
+          description: "The core DaemonSet has had all desired Pods unavailable for more than 5 minutes."
+      - alert: KubernetesPodUnschedulable
+        expr: kube_pod_status_scheduled{condition="false"} == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is unschedulable"
+          description: "The Pod has remained unschedulable for more than 10 minutes."
+      - alert: KubernetesPodPending
+        expr: |
+          (kube_pod_status_phase{phase="Pending"} == 1)
+          unless on (namespace, pod) (kube_pod_status_scheduled{condition="false"} == 1)
+          unless on (namespace, pod) (kube_pod_owner{owner_kind="Job"} == 1)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} remains pending"
+          description: "The scheduled Pod has remained in Pending phase for more than 10 minutes."
+      - alert: KubernetesPodFailed
+        expr: |
+          (kube_pod_status_phase{phase="Failed"} == 1)
+          unless on (namespace, pod) (kube_pod_owner{owner_kind="Job"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has failed"
+          description: "The non-Job Pod has remained in Failed phase for more than 5 minutes."
+      - alert: KubernetesPodUnknown
+        expr: |
+          (kube_pod_status_phase{phase="Unknown"} == 1)
+          unless on (namespace, pod) (kube_pod_owner{owner_kind="Job"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has unknown status"
+          description: "The non-Job Pod has remained in Unknown phase for more than 5 minutes."
+      - alert: KubernetesContainerWaiting
+        expr: |
+          (kube_pod_container_status_waiting_reason{reason=~"CrashLoopBackOff|ErrImagePull|ImagePullBackOff|CreateContainerConfigError|CreateContainerError|RunContainerError|ContainerCannotRun|InvalidImageName"} == 1)
+          unless on (namespace, pod) (kube_pod_owner{owner_kind="Job"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is waiting"
+          description: "The container has remained in {{ $labels.reason }} for more than 5 minutes."
+      - alert: KubernetesContainerRestarting
+        expr: |
+          (increase(kube_pod_container_status_restarts_total[15m]) >= 3)
+          unless on (namespace, pod) (kube_pod_owner{owner_kind="Job"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is restarting repeatedly"
+          description: "The container has restarted at least 3 times in 15 minutes."
+      - alert: KubernetesJobFailed
+        expr: kube_job_failed{condition="true",namespace!="postgres-backup"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Job {{ $labels.namespace }}/{{ $labels.job_name }} failed"
+          description: "The Job has remained in the Failed condition for more than 5 minutes."
+      - alert: KubernetesPostgresBackupJobFailed
+        expr: kube_job_failed{condition="true",namespace="postgres-backup"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL backup Job {{ $labels.job_name }} failed"
+          description: "The backup or prune Job has remained in the Failed condition for more than 5 minutes."
+      - alert: KubernetesCronJobMissedSchedule
+        expr: |
+          time() > kube_cronjob_next_schedule_time{namespace!="postgres-backup"} + 1800
+          and on (namespace, cronjob) kube_cronjob_status_active{namespace!="postgres-backup"} == 0
+          and on (namespace, cronjob) kube_cronjob_spec_suspend{namespace!="postgres-backup"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CronJob {{ $labels.namespace }}/{{ $labels.cronjob }} missed its schedule"
+          description: "No Job became active within 30 minutes after the expected schedule."
+      - alert: KubernetesPostgresBackupCronJobMissedSchedule
+        expr: |
+          time() > kube_cronjob_next_schedule_time{namespace="postgres-backup"} + 1800
+          and on (namespace, cronjob) kube_cronjob_status_active{namespace="postgres-backup"} == 0
+          and on (namespace, cronjob) kube_cronjob_spec_suspend{namespace="postgres-backup"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL backup CronJob {{ $labels.cronjob }} missed its schedule"
+          description: "No Job became active within 30 minutes after the expected schedule."
+      - alert: KubernetesNodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status=~"false|unknown"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kubernetes node {{ $labels.node }} is not Ready"
+          description: "The node has remained NotReady or Unknown for more than 5 minutes."
+      - alert: KubernetesNodePressure
+        expr: kube_node_status_condition{condition=~"MemoryPressure|DiskPressure|PIDPressure",status="true"} == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kubernetes node {{ $labels.node }} has {{ $labels.condition }}"
+          description: "The node condition {{ $labels.condition }} has remained true for more than 10 minutes."
       - alert: KubernetesPersistentVolumeClaimPending
         expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1
         for: 10m

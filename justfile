@@ -44,7 +44,7 @@ nix-check:
 # validate static and generated Prometheus alert rules
 [group('nix')]
 prometheus-rules-test:
-  nix-shell -p prometheus.cli python3 --run 'promtool check rules nix/modules/sliver/prometheus/rules.yml && promtool test rules nix/modules/sliver/prometheus/rules.test.yml && scripts/test-prometheus-systemd-rules'
+  nix-shell -p prometheus.cli python3 --run 'promtool check rules nix/modules/sliver/prometheus/rules.yml && promtool test rules nix/modules/sliver/prometheus/rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-rules.test.yml && scripts/test-prometheus-systemd-rules'
 
 # ssh into a nixos node
 [group('nix')]

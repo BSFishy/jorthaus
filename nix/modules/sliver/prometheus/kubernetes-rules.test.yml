@@ -1,0 +1,366 @@
+rule_files:
+  - rules.yml
+evaluation_interval: 30s
+tests:
+  - interval: 30s
+    input_series:
+      - series: 'kube_deployment_status_replicas_unavailable{namespace="authentik",deployment="server"}'
+        values: '0+0x100'
+      - series: 'kube_deployment_status_replicas_available{namespace="authentik",deployment="server"}'
+        values: '2+0x100'
+      - series: 'kube_deployment_spec_replicas{namespace="authentik",deployment="server"}'
+        values: '2+0x100'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="thanos",statefulset="store"}'
+        values: '1+0x100'
+      - series: 'kube_statefulset_replicas{namespace="thanos",statefulset="store"}'
+        values: '1+0x100'
+      - series: 'kube_daemonset_status_number_unavailable{namespace="kube-system",daemonset="cilium"}'
+        values: '0+0x100'
+      - series: 'kube_daemonset_status_desired_number_scheduled{namespace="kube-system",daemonset="cilium"}'
+        values: '5+0x100'
+      - series: 'kube_pod_status_scheduled{namespace="apps",pod="healthy",condition="false"}'
+        values: '0+0x100'
+      - series: 'kube_pod_status_phase{namespace="apps",pod="healthy",phase="Running"}'
+        values: '1+0x100'
+      - series: 'kube_pod_container_status_waiting_reason{namespace="apps",pod="healthy",container="app",reason="CrashLoopBackOff"}'
+        values: '0+0x100'
+      - series: 'kube_pod_container_status_restarts_total{namespace="apps",pod="healthy",container="app"}'
+        values: '0+0x100'
+      - series: 'kube_job_failed{namespace="postgres-backup",job_name="postgres-backup-1",condition="true"}'
+        values: '0+0x100'
+      - series: 'kube_cronjob_next_schedule_time{namespace="postgres-backup",cronjob="postgres-backup"}'
+        values: '3600+0x100'
+      - series: 'kube_cronjob_status_active{namespace="postgres-backup",cronjob="postgres-backup"}'
+        values: '0+0x100'
+      - series: 'kube_cronjob_spec_suspend{namespace="postgres-backup",cronjob="postgres-backup"}'
+        values: '0+0x100'
+      - series: 'kube_node_status_condition{node="gaia-01",condition="Ready",status="true"}'
+        values: '1+0x100'
+      - series: 'kube_node_status_condition{node="gaia-01",condition="Ready",status="false"}'
+        values: '0+0x100'
+      - series: 'kube_node_status_condition{node="gaia-01",condition="DiskPressure",status="true"}'
+        values: '0+0x100'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: KubernetesDeploymentReplicasUnavailable
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesDeploymentUnavailableCritical
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesStatefulSetReplicasUnavailable
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesStatefulSetUnavailableCritical
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesDaemonSetUnavailable
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesDaemonSetUnavailableCritical
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesPodUnschedulable
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesPodPending
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesPodFailed
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesPodUnknown
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerWaiting
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesContainerRestarting
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesJobFailed
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesPostgresBackupJobFailed
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesCronJobMissedSchedule
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesPostgresBackupCronJobMissedSchedule
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesNodeNotReady
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesNodePressure
+        exp_alerts: []
+  - interval: 30s
+    input_series:
+      - series: 'kube_deployment_status_replicas_unavailable{namespace="hister",deployment="web"}'
+        values: '1+0x100'
+      - series: 'kube_deployment_status_replicas_available{namespace="hister",deployment="web"}'
+        values: '1+0x100'
+      - series: 'kube_deployment_spec_replicas{namespace="hister",deployment="web"}'
+        values: '2+0x100'
+      - series: 'kube_deployment_status_replicas_unavailable{namespace="authentik",deployment="server"}'
+        values: '2+0x100'
+      - series: 'kube_deployment_status_replicas_available{namespace="authentik",deployment="server"}'
+        values: '0+0x100'
+      - series: 'kube_deployment_spec_replicas{namespace="authentik",deployment="server"}'
+        values: '2+0x100'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="victorialogs",statefulset="vl"}'
+        values: '1+0x100'
+      - series: 'kube_statefulset_replicas{namespace="victorialogs",statefulset="vl"}'
+        values: '2+0x100'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="thanos",statefulset="store"}'
+        values: '0+0x100'
+      - series: 'kube_statefulset_replicas{namespace="thanos",statefulset="store"}'
+        values: '1+0x100'
+      - series: 'kube_daemonset_status_number_unavailable{namespace="kube-system",daemonset="cilium"}'
+        values: '5+0x100'
+      - series: 'kube_daemonset_status_desired_number_scheduled{namespace="kube-system",daemonset="cilium"}'
+        values: '5+0x100'
+      - series: 'kube_pod_status_scheduled{namespace="apps",pod="stuck",condition="false"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_phase{namespace="apps",pod="stuck",phase="Pending"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_scheduled{namespace="apps",pod="pending",condition="true"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_phase{namespace="apps",pod="pending",phase="Pending"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_phase{namespace="apps",pod="failed",phase="Failed"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_phase{namespace="apps",pod="unknown",phase="Unknown"}'
+        values: '1+0x100'
+      - series: 'kube_pod_container_status_waiting_reason{namespace="apps",pod="crashing",container="web",reason="CrashLoopBackOff"}'
+        values: '1+0x100'
+      - series: 'kube_pod_owner{namespace="apps",pod="crashing",owner_kind="ReplicaSet"}'
+        values: '1+0x100'
+      - series: 'kube_pod_container_status_restarts_total{namespace="apps",pod="restarting",container="web"}'
+        values: '0+1x100'
+      - series: 'kube_pod_owner{namespace="apps",pod="job-pod",owner_kind="Job"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_phase{namespace="apps",pod="job-pod",phase="Failed"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_phase{namespace="apps",pod="job-pending",phase="Pending"}'
+        values: '1+0x100'
+      - series: 'kube_pod_status_scheduled{namespace="apps",pod="job-pending",condition="true"}'
+        values: '1+0x100'
+      - series: 'kube_pod_owner{namespace="apps",pod="job-pending",owner_kind="Job"}'
+        values: '1+0x100'
+      - series: 'kube_pod_container_status_waiting_reason{namespace="apps",pod="job-pod",container="task",reason="CrashLoopBackOff"}'
+        values: '1+0x100'
+      - series: 'kube_pod_container_status_restarts_total{namespace="apps",pod="job-pod",container="task"}'
+        values: '0+1x100'
+      - series: 'kube_job_failed{namespace="postgres-backup",job_name="postgres-backup-1",condition="true"}'
+        values: '1+0x100'
+      - series: 'kube_job_failed{namespace="default",job_name="cleanup-1",condition="true"}'
+        values: '1+0x100'
+      - series: 'kube_cronjob_next_schedule_time{namespace="postgres-backup",cronjob="postgres-backup"}'
+        values: '600+0x100'
+      - series: 'kube_cronjob_status_active{namespace="postgres-backup",cronjob="postgres-backup"}'
+        values: '0+0x100'
+      - series: 'kube_cronjob_spec_suspend{namespace="postgres-backup",cronjob="postgres-backup"}'
+        values: '0+0x100'
+      - series: 'kube_cronjob_next_schedule_time{namespace="default",cronjob="cleanup"}'
+        values: '600+0x100'
+      - series: 'kube_cronjob_status_active{namespace="default",cronjob="cleanup"}'
+        values: '0+0x100'
+      - series: 'kube_cronjob_spec_suspend{namespace="default",cronjob="cleanup"}'
+        values: '0+0x100'
+      - series: 'kube_cronjob_next_schedule_time{namespace="default",cronjob="suspended"}'
+        values: '600+0x100'
+      - series: 'kube_cronjob_status_active{namespace="default",cronjob="suspended"}'
+        values: '0+0x100'
+      - series: 'kube_cronjob_spec_suspend{namespace="default",cronjob="suspended"}'
+        values: '1+0x100'
+      - series: 'kube_node_status_condition{node="gaia-01",condition="Ready",status="false"}'
+        values: '1+0x100'
+      - series: 'kube_node_status_condition{node="gaia-01",condition="DiskPressure",status="true"}'
+        values: '1+0x100'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: KubernetesDeploymentReplicasUnavailable
+        exp_alerts:
+          - exp_labels:
+              namespace: hister
+              deployment: web
+              severity: warning
+            exp_annotations:
+              summary: "Deployment hister/web has unavailable replicas"
+              description: "The deployment has had unavailable replicas for more than 10 minutes."
+      - eval_time: 45m
+        alertname: KubernetesDeploymentUnavailableCritical
+        exp_alerts:
+          - exp_labels:
+              namespace: authentik
+              deployment: server
+              severity: critical
+            exp_annotations:
+              summary: "Deployment authentik/server has no available replicas"
+              description: "The core deployment has had zero available replicas for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesStatefulSetReplicasUnavailable
+        exp_alerts:
+          - exp_labels:
+              namespace: victorialogs
+              statefulset: vl
+              severity: warning
+            exp_annotations:
+              summary: "StatefulSet victorialogs/vl has unavailable replicas"
+              description: "The StatefulSet has had fewer ready replicas than desired for more than 10 minutes."
+      - eval_time: 45m
+        alertname: KubernetesStatefulSetUnavailableCritical
+        exp_alerts:
+          - exp_labels:
+              namespace: thanos
+              statefulset: store
+              severity: critical
+            exp_annotations:
+              summary: "StatefulSet thanos/store has no ready replicas"
+              description: "The core StatefulSet has had zero ready replicas for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesDaemonSetUnavailable
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: KubernetesDaemonSetUnavailableCritical
+        exp_alerts:
+          - exp_labels:
+              namespace: kube-system
+              daemonset: cilium
+              severity: critical
+            exp_annotations:
+              summary: "DaemonSet kube-system/cilium has no available Pods"
+              description: "The core DaemonSet has had all desired Pods unavailable for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesPodUnschedulable
+        exp_alerts:
+          - exp_labels:
+              namespace: apps
+              pod: stuck
+              condition: "false"
+              severity: warning
+            exp_annotations:
+              summary: "Pod apps/stuck is unschedulable"
+              description: "The Pod has remained unschedulable for more than 10 minutes."
+      - eval_time: 45m
+        alertname: KubernetesPodPending
+        exp_alerts:
+          - exp_labels:
+              namespace: apps
+              pod: pending
+              phase: Pending
+              severity: warning
+            exp_annotations:
+              summary: "Pod apps/pending remains pending"
+              description: "The scheduled Pod has remained in Pending phase for more than 10 minutes."
+      - eval_time: 45m
+        alertname: KubernetesPodFailed
+        exp_alerts:
+          - exp_labels:
+              namespace: apps
+              pod: failed
+              phase: Failed
+              severity: warning
+            exp_annotations:
+              summary: "Pod apps/failed has failed"
+              description: "The non-Job Pod has remained in Failed phase for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesPodUnknown
+        exp_alerts:
+          - exp_labels:
+              namespace: apps
+              pod: unknown
+              phase: Unknown
+              severity: warning
+            exp_annotations:
+              summary: "Pod apps/unknown has unknown status"
+              description: "The non-Job Pod has remained in Unknown phase for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesContainerWaiting
+        exp_alerts:
+          - exp_labels:
+              namespace: apps
+              pod: crashing
+              container: web
+              reason: CrashLoopBackOff
+              severity: warning
+            exp_annotations:
+              summary: "Container apps/crashing/web is waiting"
+              description: "The container has remained in CrashLoopBackOff for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesContainerRestarting
+        exp_alerts:
+          - exp_labels:
+              namespace: apps
+              pod: restarting
+              container: web
+              severity: warning
+            exp_annotations:
+              summary: "Container apps/restarting/web is restarting repeatedly"
+              description: "The container has restarted at least 3 times in 15 minutes."
+      - eval_time: 45m
+        alertname: KubernetesJobFailed
+        exp_alerts:
+          - exp_labels:
+              namespace: default
+              job_name: cleanup-1
+              condition: "true"
+              severity: warning
+            exp_annotations:
+              summary: "Job default/cleanup-1 failed"
+              description: "The Job has remained in the Failed condition for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesPostgresBackupJobFailed
+        exp_alerts:
+          - exp_labels:
+              namespace: postgres-backup
+              job_name: postgres-backup-1
+              condition: "true"
+              severity: critical
+            exp_annotations:
+              summary: "PostgreSQL backup Job postgres-backup-1 failed"
+              description: "The backup or prune Job has remained in the Failed condition for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesCronJobMissedSchedule
+        exp_alerts:
+          - exp_labels:
+              namespace: default
+              cronjob: cleanup
+              severity: warning
+            exp_annotations:
+              summary: "CronJob default/cleanup missed its schedule"
+              description: "No Job became active within 30 minutes after the expected schedule."
+      - eval_time: 45m
+        alertname: KubernetesPostgresBackupCronJobMissedSchedule
+        exp_alerts:
+          - exp_labels:
+              namespace: postgres-backup
+              cronjob: postgres-backup
+              severity: critical
+            exp_annotations:
+              summary: "PostgreSQL backup CronJob postgres-backup missed its schedule"
+              description: "No Job became active within 30 minutes after the expected schedule."
+      - eval_time: 45m
+        alertname: KubernetesNodeNotReady
+        exp_alerts:
+          - exp_labels:
+              node: gaia-01
+              condition: Ready
+              status: "false"
+              severity: critical
+            exp_annotations:
+              summary: "Kubernetes node gaia-01 is not Ready"
+              description: "The node has remained NotReady or Unknown for more than 5 minutes."
+      - eval_time: 45m
+        alertname: KubernetesNodePressure
+        exp_alerts:
+          - exp_labels:
+              node: gaia-01
+              condition: DiskPressure
+              status: "true"
+              severity: warning
+            exp_annotations:
+              summary: "Kubernetes node gaia-01 has DiskPressure"
+              description: "The node condition DiskPressure has remained true for more than 10 minutes."
