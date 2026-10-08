@@ -25,7 +25,10 @@ let
   metricsDirectory = "/run/prometheus-node-exporter";
   metricsCollector = pkgs.writeShellApplication {
     name = "jorthaus-xfs-project-quota-metrics";
-    runtimeInputs = [ pkgs.python3 pkgs.xfsprogs ];
+    runtimeInputs = [
+      pkgs.python3
+      pkgs.xfsprogs
+    ];
     text = ''
       exec ${pkgs.python3}/bin/python3 ${../../../scripts/collect-xfs-project-quota-metrics} "$@"
     '';
@@ -105,7 +108,9 @@ in
       sliver = "xfsQuota";
       severity = "warning";
     }) (lib.attrNames projectsByFileSystem);
-    jorthaus.prometheus.localSystemdServices = map metricsTimerName (lib.attrNames projectsByFileSystem);
+    jorthaus.prometheus.localSystemdServices = map metricsTimerName (
+      lib.attrNames projectsByFileSystem
+    );
 
     systemd.services =
       lib.mapAttrs' (
@@ -168,16 +173,25 @@ in
         in
         lib.nameValuePair serviceName {
           description = "Collect XFS project quota metrics for ${fileSystem}";
-          requires = [ (mountUnitName fileSystem) "prometheus-node-exporter.service" ] ++ quotaUnits;
+          requires = [
+            (mountUnitName fileSystem)
+            "prometheus-node-exporter.service"
+          ]
+          ++ quotaUnits;
           after = [
             (mountUnitName fileSystem)
             "prometheus-node-exporter.service"
             "systemd-tmpfiles-setup.service"
-          ] ++ quotaUnits;
+          ]
+          ++ quotaUnits;
           serviceConfig = {
             Type = "oneshot";
             ExecStart = lib.escapeShellArgs (
-              [ "${metricsCollector}/bin/jorthaus-xfs-project-quota-metrics" fileSystem outputFile ]
+              [
+                "${metricsCollector}/bin/jorthaus-xfs-project-quota-metrics"
+                fileSystem
+                outputFile
+              ]
               ++ projectNames
             );
           };

@@ -217,303 +217,303 @@ in
   config = lib.mkMerge [
     { jorthaus.prometheus.systemdServices = systemdServices; }
     (lib.mkIf active {
-    jorthaus.prometheus.localSystemdServices = lib.optionals enabled [ "k3s.service" ];
-    assertions = [
-      {
-        assertion = controlplaneHosts != [ ];
-        message = "The k3s sliver requires at least one enabled controlplane or bootstrap-only controlplane node.";
-      }
-      {
-        assertion = postgresHosts != [ ];
-        message = "The k3s sliver requires at least one enabled Postgres node for the external datastore path.";
-      }
-    ];
-
-    users.users.k3s = {
-      isSystemUser = true;
-      group = "k3s";
-    };
-
-    users.groups.k3s = { };
-
-    age.secrets.${roleIdSecretName} = {
-      file = ../../../secrets/k3s-approle-role-id.age;
-      owner = "root";
-      group = "k3s";
-      mode = "0440";
-    };
-
-    age.secrets.${secretIdSecretName} = {
-      file = ../../../secrets/k3s-approle-secret-id.age;
-      owner = "root";
-      group = "k3s";
-      mode = "0440";
-    };
-
-    age.secrets.${datastorePasswordSecretName} = lib.mkIf controlplaneEnabled {
-      file = ../../../secrets/k3s-datastore-password.age;
-      owner = "root";
-      group = "root";
-      mode = "0400";
-    };
-
-    systemd.tmpfiles.rules = [
-      # Secondary CNI attachments use the host CNI binary directory that k3s
-      # exposes to the runtime.
-      "r /opt/cni/bin/macvlan - - - -"
-      "C /opt/cni/bin/macvlan - - - - ${pkgs.cni-plugins}/bin/macvlan"
-      "d ${agentDir} 0750 k3s k3s -"
-      "d /run/k3s 0750 k3s k3s -"
-    ];
-
-    services.vault-agent.instances.k3s = {
-      package = pkgs.openbao;
-      user = "k3s";
-      group = "k3s";
-      settings = {
-        pid_file = "${agentDir}/vault-agent.pid";
-
-        vault = {
-          address = "https://openbao.service.jort.haus:8200";
-          tls_server_name = "openbao.service.jort.haus";
-          ca_cert = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-        };
-
-        auto_auth = [
-          {
-            method = [
-              {
-                type = "approle";
-                mount_path = "auth/approle";
-                config = {
-                  role_id_file_path = roleIdFile;
-                  secret_id_file_path = secretIdFile;
-                  remove_secret_id_file_after_reading = false;
-                };
-              }
-            ];
-
-            sink = [
-              {
-                type = "file";
-                config = {
-                  path = "${agentDir}/openbao.token";
-                  mode = 256;
-                };
-              }
-            ];
-          }
-        ];
-
-        template_config.static_secret_render_interval = "5m";
-
-        template = [
-          {
-            destination = tokenFile;
-            perms = 288;
-            contents = ''
-              {{- with secret "k3s/data/bootstrap" }}
-              {{ .Data.data.token }}
-              {{- end }}
-            '';
-          }
-        ];
-      };
-    };
-
-    systemd.services.vault-agent-k3s = {
-      after = [
-        "network-online.target"
-        "agenix.service"
-      ]
-      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
-      wants = [
-        "network-online.target"
-        "agenix.service"
-      ]
-      ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
-      serviceConfig = {
-        RuntimeDirectory = lib.mkForce "k3s-agent";
-        RuntimeDirectoryMode = lib.mkForce "0750";
-      };
-    };
-
-    systemd.services.jorthaus-k3s-datastore-env = lib.mkIf controlplaneEnabled {
-      description = "Render the agenix-backed K3s PostgreSQL datastore environment";
-      after = [ "systemd-tmpfiles-setup.service" ];
-      before = [ "k3s.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-      };
-      script = ''
-        set -euo pipefail
-        password="$(tr -d '\r\n' < ${
-          lib.escapeShellArg config.age.secrets.${datastorePasswordSecretName}.path
-        })"
-        if [[ ! $password =~ ^[0-9a-f]{64}$ ]]; then
-          echo "K3s datastore password has an unexpected format" >&2
-          exit 1
-        fi
-
-        umask 077
-        temporary="$(mktemp ${lib.escapeShellArg "${datastoreEnvFile}.XXXXXX"})"
-        cleanup() {
-          rm -f -- "$temporary"
-          unset password
-        }
-        trap cleanup EXIT
-
-        printf 'K3S_DATASTORE_ENDPOINT=postgres://k3s_static:%s@postgres.service.jort.haus:5432/k3s?sslmode=verify-full\n' "$password" > "$temporary"
-        chown root:k3s "$temporary"
-        chmod 0440 "$temporary"
-        mv -f -- "$temporary" ${lib.escapeShellArg datastoreEnvFile}
-        trap - EXIT
-        unset password
-      '';
-    };
-
-    jorthaus.postgres.ensure = {
-      users.k3s.login = false;
-      users.k3s_static = lib.mkIf controlplaneEnabled {
-        login = true;
-        passwordFile = config.age.secrets.${datastorePasswordSecretName}.path;
-        memberships = [ "k3s" ];
-        databaseGrants.k3s = [ "CONNECT" ];
-      };
-
-      databases.k3s = {
-        owner = "k3s";
-        schemas.public = {
-          owner = "k3s";
-          grantAllTo = [ "k3s" ];
-          defaultPrivilegesFor = [ "k3s" ];
-        };
-      };
-    };
-
-    jorthaus.routing.loopbackAddresses = lib.mkIf controlplaneEnabled [ "${cfg.api.stableAddress}/32" ];
-
-    jorthaus.persistence.directories = lib.mkIf enabled [
-      {
-        directory = "/var/lib/rancher/k3s";
-        user = "k3s";
-        group = "k3s";
-        mode = "0700";
-      }
-      {
-        directory = "/etc/rancher/k3s";
-        user = "k3s";
-        group = "k3s";
-        mode = "0700";
-      }
-      {
-        directory = "/etc/rancher/node";
-        user = "root";
-        group = "root";
-        mode = "0755";
-      }
-    ];
-
-    networking.firewall.allowedTCPPorts = lib.mkIf controlplaneEnabled [ cfg.api.port ];
-    networking.firewall.extraCommands = lib.mkIf enabled (
-      lib.concatMapStringsSep "\n" (
-        peer:
-        lib.concatMapStringsSep "\n" (
-          port:
-          "iptables -A nixos-fw -p tcp -s ${peer.ipam.ipv4.address}/32 -m tcp --dport ${toString port} -j nixos-fw-accept"
-        ) prometheusScrapePorts
-      ) prometheusHosts
-    );
-    networking.firewall.allowedUDPPorts = lib.mkIf enabled [ ciliumGenevePort ];
-    networking.firewall.checkReversePath = lib.mkIf enabled false;
-
-    systemd.services.jorthaus-k3s-weekly-reboot-sentinel = lib.mkIf enabled {
-      description = "Mark the node for a kured-managed weekly reboot";
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-        ExecStart = "${pkgs.coreutils}/bin/touch ${rebootSentinelFile}";
-      };
-    };
-
-    systemd.timers.jorthaus-k3s-weekly-reboot-sentinel = lib.mkIf enabled {
-      description = "Weekly reboot sentinel for kured-managed node restarts";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnBootSec = "1w";
-        Unit = "jorthaus-k3s-weekly-reboot-sentinel.service";
-      };
-    };
-
-    # This cluster starts without the built-in flannel dataplane so a
-    # dedicated CNI such as Cilium can own pod networking from the outset.
-    systemd.services.k3s = lib.mkMerge [
-      # K3s owns containerd and its shims; stopping the unit must stop the entire runtime cgroup.
-      (lib.mkIf enabled {
-        serviceConfig.KillMode = lib.mkForce "control-group";
-      })
-      (lib.mkIf controlplaneEnabled {
-        after = [ "jorthaus-k3s-datastore-env.service" ];
-        requires = [ "jorthaus-k3s-datastore-env.service" ];
-      })
-      (lib.mkIf
-        (
-          enabled && cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname
-        )
+      jorthaus.prometheus.localSystemdServices = lib.optionals enabled [ "k3s.service" ];
+      assertions = [
         {
-          after = [ "jorthaus-postgres-ensure.service" ];
-          wants = [ "jorthaus-postgres-ensure.service" ];
+          assertion = controlplaneHosts != [ ];
+          message = "The k3s sliver requires at least one enabled controlplane or bootstrap-only controlplane node.";
         }
-      )
-    ];
+        {
+          assertion = postgresHosts != [ ];
+          message = "The k3s sliver requires at least one enabled Postgres node for the external datastore path.";
+        }
+      ];
 
-    services.k3s = lib.mkIf enabled (
-      {
-        enable = true;
-        role = if controlplaneEnabled then "server" else "agent";
-        inherit serverAddr;
-        tokenFile = cfg.token.file;
-        nodeName = host.hostname;
-        nodeLabel = [ "jort.haus/ssdp-relay=true" ];
-        nodeIP = host.ipam.ipv4.address;
-        gracefulNodeShutdown.enable = true;
-      }
-      // lib.optionalAttrs controlplaneEnabled {
-        environmentFile = cfg.datastore.envFile;
-        disable = disableDefaults;
-        extraFlags = [
-          "--write-kubeconfig-mode=0640"
-          "--disable-network-policy"
-          "--flannel-backend=none"
+      users.users.k3s = {
+        isSystemUser = true;
+        group = "k3s";
+      };
+
+      users.groups.k3s = { };
+
+      age.secrets.${roleIdSecretName} = {
+        file = ../../../secrets/k3s-approle-role-id.age;
+        owner = "root";
+        group = "k3s";
+        mode = "0440";
+      };
+
+      age.secrets.${secretIdSecretName} = {
+        file = ../../../secrets/k3s-approle-secret-id.age;
+        owner = "root";
+        group = "k3s";
+        mode = "0440";
+      };
+
+      age.secrets.${datastorePasswordSecretName} = lib.mkIf controlplaneEnabled {
+        file = ../../../secrets/k3s-datastore-password.age;
+        owner = "root";
+        group = "root";
+        mode = "0400";
+      };
+
+      systemd.tmpfiles.rules = [
+        # Secondary CNI attachments use the host CNI binary directory that k3s
+        # exposes to the runtime.
+        "r /opt/cni/bin/macvlan - - - -"
+        "C /opt/cni/bin/macvlan - - - - ${pkgs.cni-plugins}/bin/macvlan"
+        "d ${agentDir} 0750 k3s k3s -"
+        "d /run/k3s 0750 k3s k3s -"
+      ];
+
+      services.vault-agent.instances.k3s = {
+        package = pkgs.openbao;
+        user = "k3s";
+        group = "k3s";
+        settings = {
+          pid_file = "${agentDir}/vault-agent.pid";
+
+          vault = {
+            address = "https://openbao.service.jort.haus:8200";
+            tls_server_name = "openbao.service.jort.haus";
+            ca_cert = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          };
+
+          auto_auth = [
+            {
+              method = [
+                {
+                  type = "approle";
+                  mount_path = "auth/approle";
+                  config = {
+                    role_id_file_path = roleIdFile;
+                    secret_id_file_path = secretIdFile;
+                    remove_secret_id_file_after_reading = false;
+                  };
+                }
+              ];
+
+              sink = [
+                {
+                  type = "file";
+                  config = {
+                    path = "${agentDir}/openbao.token";
+                    mode = 256;
+                  };
+                }
+              ];
+            }
+          ];
+
+          template_config.static_secret_render_interval = "5m";
+
+          template = [
+            {
+              destination = tokenFile;
+              perms = 288;
+              contents = ''
+                {{- with secret "k3s/data/bootstrap" }}
+                {{ .Data.data.token }}
+                {{- end }}
+              '';
+            }
+          ];
+        };
+      };
+
+      systemd.services.vault-agent-k3s = {
+        after = [
+          "network-online.target"
+          "agenix.service"
         ]
-        ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
-      }
-    );
+        ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+        wants = [
+          "network-online.target"
+          "agenix.service"
+        ]
+        ++ lib.optionals host.slivers.openbao.enable [ "openbao.service" ];
+        serviceConfig = {
+          RuntimeDirectory = lib.mkForce "k3s-agent";
+          RuntimeDirectoryMode = lib.mkForce "0750";
+        };
+      };
 
-    systemd.services.jorthaus-k3s-ssdp-relay-image = lib.mkIf enabled {
-      description = "Import the declarative SSDP relay image into k3s containerd";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "k3s.service" ];
-      requires = [ "k3s.service" ];
-      restartTriggers = [ ssdpRelayImage ];
-      serviceConfig.Type = "oneshot";
-      script = ''
-        for _ in $(seq 1 30); do
-          if ${pkgs.k3s}/bin/k3s ctr --namespace k8s.io images import ${ssdpRelayImage}; then
-            exit 0
+      systemd.services.jorthaus-k3s-datastore-env = lib.mkIf controlplaneEnabled {
+        description = "Render the agenix-backed K3s PostgreSQL datastore environment";
+        after = [ "systemd-tmpfiles-setup.service" ];
+        before = [ "k3s.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "root";
+        };
+        script = ''
+          set -euo pipefail
+          password="$(tr -d '\r\n' < ${
+            lib.escapeShellArg config.age.secrets.${datastorePasswordSecretName}.path
+          })"
+          if [[ ! $password =~ ^[0-9a-f]{64}$ ]]; then
+            echo "K3s datastore password has an unexpected format" >&2
+            exit 1
           fi
-          sleep 1
-        done
-        exit 1
-      '';
-    };
 
-    # TODO: Move k3s datastore bootstrap into the long-term activation-time
-    # setup path once cluster-scoped initialization is no longer modeled as a
-    # manual helper or boot-time oneshot.
-    # TODO: Gate advertisement of ${stableApiAddress}/32 on local k3s API
-    # health so non-ready controlplanes withdraw the stable API endpoint.
+          umask 077
+          temporary="$(mktemp ${lib.escapeShellArg "${datastoreEnvFile}.XXXXXX"})"
+          cleanup() {
+            rm -f -- "$temporary"
+            unset password
+          }
+          trap cleanup EXIT
+
+          printf 'K3S_DATASTORE_ENDPOINT=postgres://k3s_static:%s@postgres.service.jort.haus:5432/k3s?sslmode=verify-full\n' "$password" > "$temporary"
+          chown root:k3s "$temporary"
+          chmod 0440 "$temporary"
+          mv -f -- "$temporary" ${lib.escapeShellArg datastoreEnvFile}
+          trap - EXIT
+          unset password
+        '';
+      };
+
+      jorthaus.postgres.ensure = {
+        users.k3s.login = false;
+        users.k3s_static = lib.mkIf controlplaneEnabled {
+          login = true;
+          passwordFile = config.age.secrets.${datastorePasswordSecretName}.path;
+          memberships = [ "k3s" ];
+          databaseGrants.k3s = [ "CONNECT" ];
+        };
+
+        databases.k3s = {
+          owner = "k3s";
+          schemas.public = {
+            owner = "k3s";
+            grantAllTo = [ "k3s" ];
+            defaultPrivilegesFor = [ "k3s" ];
+          };
+        };
+      };
+
+      jorthaus.routing.loopbackAddresses = lib.mkIf controlplaneEnabled [ "${cfg.api.stableAddress}/32" ];
+
+      jorthaus.persistence.directories = lib.mkIf enabled [
+        {
+          directory = "/var/lib/rancher/k3s";
+          user = "k3s";
+          group = "k3s";
+          mode = "0700";
+        }
+        {
+          directory = "/etc/rancher/k3s";
+          user = "k3s";
+          group = "k3s";
+          mode = "0700";
+        }
+        {
+          directory = "/etc/rancher/node";
+          user = "root";
+          group = "root";
+          mode = "0755";
+        }
+      ];
+
+      networking.firewall.allowedTCPPorts = lib.mkIf controlplaneEnabled [ cfg.api.port ];
+      networking.firewall.extraCommands = lib.mkIf enabled (
+        lib.concatMapStringsSep "\n" (
+          peer:
+          lib.concatMapStringsSep "\n" (
+            port:
+            "iptables -A nixos-fw -p tcp -s ${peer.ipam.ipv4.address}/32 -m tcp --dport ${toString port} -j nixos-fw-accept"
+          ) prometheusScrapePorts
+        ) prometheusHosts
+      );
+      networking.firewall.allowedUDPPorts = lib.mkIf enabled [ ciliumGenevePort ];
+      networking.firewall.checkReversePath = lib.mkIf enabled false;
+
+      systemd.services.jorthaus-k3s-weekly-reboot-sentinel = lib.mkIf enabled {
+        description = "Mark the node for a kured-managed weekly reboot";
+        serviceConfig = {
+          Type = "oneshot";
+          User = "root";
+          ExecStart = "${pkgs.coreutils}/bin/touch ${rebootSentinelFile}";
+        };
+      };
+
+      systemd.timers.jorthaus-k3s-weekly-reboot-sentinel = lib.mkIf enabled {
+        description = "Weekly reboot sentinel for kured-managed node restarts";
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "1w";
+          Unit = "jorthaus-k3s-weekly-reboot-sentinel.service";
+        };
+      };
+
+      # This cluster starts without the built-in flannel dataplane so a
+      # dedicated CNI such as Cilium can own pod networking from the outset.
+      systemd.services.k3s = lib.mkMerge [
+        # K3s owns containerd and its shims; stopping the unit must stop the entire runtime cgroup.
+        (lib.mkIf enabled {
+          serviceConfig.KillMode = lib.mkForce "control-group";
+        })
+        (lib.mkIf controlplaneEnabled {
+          after = [ "jorthaus-k3s-datastore-env.service" ];
+          requires = [ "jorthaus-k3s-datastore-env.service" ];
+        })
+        (lib.mkIf
+          (
+            enabled && cfg.postgresBootstrapHost != null && host.hostname == cfg.postgresBootstrapHost.hostname
+          )
+          {
+            after = [ "jorthaus-postgres-ensure.service" ];
+            wants = [ "jorthaus-postgres-ensure.service" ];
+          }
+        )
+      ];
+
+      services.k3s = lib.mkIf enabled (
+        {
+          enable = true;
+          role = if controlplaneEnabled then "server" else "agent";
+          inherit serverAddr;
+          tokenFile = cfg.token.file;
+          nodeName = host.hostname;
+          nodeLabel = [ "jort.haus/ssdp-relay=true" ];
+          nodeIP = host.ipam.ipv4.address;
+          gracefulNodeShutdown.enable = true;
+        }
+        // lib.optionalAttrs controlplaneEnabled {
+          environmentFile = cfg.datastore.envFile;
+          disable = disableDefaults;
+          extraFlags = [
+            "--write-kubeconfig-mode=0640"
+            "--disable-network-policy"
+            "--flannel-backend=none"
+          ]
+          ++ map (name: "--tls-san=${name}") cfg.api.tlsSans;
+        }
+      );
+
+      systemd.services.jorthaus-k3s-ssdp-relay-image = lib.mkIf enabled {
+        description = "Import the declarative SSDP relay image into k3s containerd";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "k3s.service" ];
+        requires = [ "k3s.service" ];
+        restartTriggers = [ ssdpRelayImage ];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          for _ in $(seq 1 30); do
+            if ${pkgs.k3s}/bin/k3s ctr --namespace k8s.io images import ${ssdpRelayImage}; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+        '';
+      };
+
+      # TODO: Move k3s datastore bootstrap into the long-term activation-time
+      # setup path once cluster-scoped initialization is no longer modeled as a
+      # manual helper or boot-time oneshot.
+      # TODO: Gate advertisement of ${stableApiAddress}/32 on local k3s API
+      # health so non-ready controlplanes withdraw the stable API endpoint.
     })
   ];
 }

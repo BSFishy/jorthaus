@@ -161,43 +161,43 @@ in
     (mkIf (enabledServices != { }) {
       jorthaus.prometheus.localSystemdServices = [ "haproxy.service" ];
       assertions = mapAttrsToList (name: service: {
-      assertion = service.backends != [ ];
-      message = "jorthaus.haproxy.services.${name} must define at least one backend.";
-    }) enabledServices;
+        assertion = service.backends != [ ];
+        message = "jorthaus.haproxy.services.${name} must define at least one backend.";
+      }) enabledServices;
 
-    jorthaus.routing.loopbackAddresses = unique (
-      flatten (mapAttrsToList (_: service: [ "${service.address}/32" ]) enabledServices)
-    );
+      jorthaus.routing.loopbackAddresses = unique (
+        flatten (mapAttrsToList (_: service: [ "${service.address}/32" ]) enabledServices)
+      );
 
-    networking.firewall.allowedTCPPorts = unique (
-      map (service: service.port) (builtins.attrValues enabledServices)
-    );
+      networking.firewall.allowedTCPPorts = unique (
+        map (service: service.port) (builtins.attrValues enabledServices)
+      );
 
-    services.haproxy = {
-      enable = true;
-      config = ''
-        ${optionalString (cfg.globalConfig != "") renderedGlobalConfig}
+      services.haproxy = {
+        enable = true;
+        config = ''
+          ${optionalString (cfg.globalConfig != "") renderedGlobalConfig}
 
-        defaults
-          timeout connect 5s
-          timeout client 1m
-          timeout server 1m
+          defaults
+            timeout connect 5s
+            timeout client 1m
+            timeout server 1m
 
-        ${concatMapStringsSep "\n" (name: renderService name enabledServices.${name}) (
-          builtins.attrNames enabledServices
-        )}
-      '';
-    };
+          ${concatMapStringsSep "\n" (name: renderService name enabledServices.${name}) (
+            builtins.attrNames enabledServices
+          )}
+        '';
+      };
 
-    systemd.services.haproxy.after = [
-      "network-online.target"
-    ]
-    ++ unique (flatten (mapAttrsToList (_: service: service.after) enabledServices));
-    systemd.services.haproxy.wants = [
-      "network-online.target"
-    ]
-    ++ unique (flatten (mapAttrsToList (_: service: service.wants) enabledServices));
-    systemd.services.haproxy.restartTriggers = [ config.environment.etc."haproxy.cfg".source ];
+      systemd.services.haproxy.after = [
+        "network-online.target"
+      ]
+      ++ unique (flatten (mapAttrsToList (_: service: service.after) enabledServices));
+      systemd.services.haproxy.wants = [
+        "network-online.target"
+      ]
+      ++ unique (flatten (mapAttrsToList (_: service: service.wants) enabledServices));
+      systemd.services.haproxy.restartTriggers = [ config.environment.etc."haproxy.cfg".source ];
     })
   ];
 }

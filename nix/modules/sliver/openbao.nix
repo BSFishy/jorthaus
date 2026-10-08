@@ -31,104 +31,104 @@ in
   config = lib.mkMerge [
     { jorthaus.prometheus.systemdServices = systemdServices; }
     (lib.mkIf enabled {
-    jorthaus.prometheus.localSystemdServices = [ "openbao.service" ];
-    users = {
-      users.openbao = {
-        isSystemUser = true;
-        group = "openbao";
+      jorthaus.prometheus.localSystemdServices = [ "openbao.service" ];
+      users = {
+        users.openbao = {
+          isSystemUser = true;
+          group = "openbao";
+        };
+
+        groups.openbao = { };
       };
 
-      groups.openbao = { };
-    };
-
-    security.acme.certs.${certName} = {
-      domain = nodeDnsName;
-      extraDomainNames = [
-        internalApiDnsName
-        externalApiDnsName
-      ];
-      group = "openbao";
-      reloadServices = [ "openbao.service" ];
-    };
-
-    # TODO: Keep the OpenBao bootstrap surface as small as possible. Secrets
-    # delivered here should be limited to the material required to bring the
-    # OpenBao cluster up before it can serve as the primary secret source.
-    age.secrets.openbao-key-2026-08-23 = {
-      file = ../../../secrets/openbao-key-2026-08-23.age;
-      mode = "0700";
-      owner = "openbao";
-      group = "openbao";
-    };
-
-    jorthaus.persistence.directories = [
-      {
-        directory = "/srv/openbao";
-        user = "openbao";
-        group = "openbao";
-        mode = "0700";
-      }
-    ];
-
-    jorthaus.routing.loopbackAddresses = [ "${serviceAddress}/32" ];
-
-    # TODO: Tighten OpenBao network exposure once the steady-state client paths
-    # are settled. The current firewall allows cluster and API ports broadly,
-    # and the UI remains enabled on every node.
-    networking.firewall.allowedTCPPorts = [
-      8200
-      8201
-    ];
-
-    systemd.services.openbao = {
-      after = [ "var-lib-acme.mount" ];
-      wants = [ "var-lib-acme.mount" ];
-      unitConfig = {
-        RequiresMountsFor = [
-          "/srv/openbao"
-          "/var/lib/acme"
+      security.acme.certs.${certName} = {
+        domain = nodeDnsName;
+        extraDomainNames = [
+          internalApiDnsName
+          externalApiDnsName
         ];
-        ConditionPathExists = "${certDir}/fullchain.pem";
+        group = "openbao";
+        reloadServices = [ "openbao.service" ];
       };
-      serviceConfig = {
-        DynamicUser = lib.mkForce false;
-        User = lib.mkForce "openbao";
-        Group = lib.mkForce "openbao";
-        ReadWritePaths = [ "/srv/openbao" ];
+
+      # TODO: Keep the OpenBao bootstrap surface as small as possible. Secrets
+      # delivered here should be limited to the material required to bring the
+      # OpenBao cluster up before it can serve as the primary secret source.
+      age.secrets.openbao-key-2026-08-23 = {
+        file = ../../../secrets/openbao-key-2026-08-23.age;
+        mode = "0700";
+        owner = "openbao";
+        group = "openbao";
       };
-    };
 
-    services.openbao = {
-      enable = true;
-      settings = {
-        cluster_name = "jorthaus-openbao";
-        # TODO: Revisit whether every OpenBao node should expose the UI once a
-        # more deliberate admin access pattern exists.
-        ui = true;
+      jorthaus.persistence.directories = [
+        {
+          directory = "/srv/openbao";
+          user = "openbao";
+          group = "openbao";
+          mode = "0700";
+        }
+      ];
 
-        api_addr = "https://${externalApiDnsName}:8200";
-        cluster_addr = "https://${nodeDnsName}:8201";
+      jorthaus.routing.loopbackAddresses = [ "${serviceAddress}/32" ];
 
-        listener.default = {
-          type = "tcp";
-          address = "[::]:8200";
-          cluster_address = "[::]:8201";
-          tls_cert_file = "${certDir}/fullchain.pem";
-          tls_key_file = "${certDir}/key.pem";
+      # TODO: Tighten OpenBao network exposure once the steady-state client paths
+      # are settled. The current firewall allows cluster and API ports broadly,
+      # and the UI remains enabled on every node.
+      networking.firewall.allowedTCPPorts = [
+        8200
+        8201
+      ];
+
+      systemd.services.openbao = {
+        after = [ "var-lib-acme.mount" ];
+        wants = [ "var-lib-acme.mount" ];
+        unitConfig = {
+          RequiresMountsFor = [
+            "/srv/openbao"
+            "/var/lib/acme"
+          ];
+          ConditionPathExists = "${certDir}/fullchain.pem";
         };
-
-        storage.raft = {
-          node_id = host.hostname;
-          path = "/srv/openbao";
-          retry_join = retryJoin;
-        };
-
-        seal.static = {
-          current_key_id = "openbao-key-2026-08-23";
-          current_key = "file://${config.age.secrets.openbao-key-2026-08-23.path}";
+        serviceConfig = {
+          DynamicUser = lib.mkForce false;
+          User = lib.mkForce "openbao";
+          Group = lib.mkForce "openbao";
+          ReadWritePaths = [ "/srv/openbao" ];
         };
       };
-    };
+
+      services.openbao = {
+        enable = true;
+        settings = {
+          cluster_name = "jorthaus-openbao";
+          # TODO: Revisit whether every OpenBao node should expose the UI once a
+          # more deliberate admin access pattern exists.
+          ui = true;
+
+          api_addr = "https://${externalApiDnsName}:8200";
+          cluster_addr = "https://${nodeDnsName}:8201";
+
+          listener.default = {
+            type = "tcp";
+            address = "[::]:8200";
+            cluster_address = "[::]:8201";
+            tls_cert_file = "${certDir}/fullchain.pem";
+            tls_key_file = "${certDir}/key.pem";
+          };
+
+          storage.raft = {
+            node_id = host.hostname;
+            path = "/srv/openbao";
+            retry_join = retryJoin;
+          };
+
+          seal.static = {
+            current_key_id = "openbao-key-2026-08-23";
+            current_key = "file://${config.age.secrets.openbao-key-2026-08-23.path}";
+          };
+        };
+      };
     })
   ];
 }

@@ -63,64 +63,64 @@ in
   config = lib.mkMerge [
     { jorthaus.prometheus.systemdServices = systemdServices; }
     (lib.mkIf enabled {
-    jorthaus.prometheus.localSystemdServices = [ "etcd.service" ];
-    jorthaus.persistence.directories = [
-      {
-        directory = "/srv/etcd";
-        user = "etcd";
-        group = "etcd";
-        mode = "0700";
-      }
-    ];
+      jorthaus.prometheus.localSystemdServices = [ "etcd.service" ];
+      jorthaus.persistence.directories = [
+        {
+          directory = "/srv/etcd";
+          user = "etcd";
+          group = "etcd";
+          mode = "0700";
+        }
+      ];
 
-    # TODO: Tighten etcd firewall exposure once the long-term coordination
-    # design is settled, whether that remains etcd or moves to another system.
-    networking.firewall.allowedTCPPorts = [
-      clientPort
-      peerPort
-    ];
+      # TODO: Tighten etcd firewall exposure once the long-term coordination
+      # design is settled, whether that remains etcd or moves to another system.
+      networking.firewall.allowedTCPPorts = [
+        clientPort
+        peerPort
+      ];
 
-    users.users.etcd.extraGroups = [ "cert" ];
+      users.users.etcd.extraGroups = [ "cert" ];
 
-    systemd.services.etcd = {
-      after = [ "var-lib-acme.mount" ];
-      wants = [ "var-lib-acme.mount" ];
-      unitConfig = {
-        RequiresMountsFor = [
-          "/srv/etcd"
-          "/var/lib/acme"
-        ];
-        ConditionPathExists = "${certDir}/fullchain.pem";
+      systemd.services.etcd = {
+        after = [ "var-lib-acme.mount" ];
+        wants = [ "var-lib-acme.mount" ];
+        unitConfig = {
+          RequiresMountsFor = [
+            "/srv/etcd"
+            "/var/lib/acme"
+          ];
+          ConditionPathExists = "${certDir}/fullchain.pem";
+        };
+        serviceConfig = {
+          ExecCondition = etcdStartCondition;
+          ExecStart = lib.mkForce etcdWrapper;
+        };
       };
-      serviceConfig = {
-        ExecCondition = etcdStartCondition;
-        ExecStart = lib.mkForce etcdWrapper;
+
+      services.etcd = {
+        enable = true;
+        name = host.hostname;
+        dataDir = "/srv/etcd";
+
+        listenClientUrls = [ "https://0.0.0.0:${toString clientPort}" ];
+        advertiseClientUrls = [ "https://${nodeDnsName}:${toString clientPort}" ];
+
+        listenPeerUrls = [ "https://0.0.0.0:${toString peerPort}" ];
+        initialAdvertisePeerUrls = [ "https://${nodeDnsName}:${toString peerPort}" ];
+
+        certFile = "${certDir}/fullchain.pem";
+        keyFile = "${certDir}/key.pem";
+        peerCertFile = "${certDir}/fullchain.pem";
+        peerKeyFile = "${certDir}/key.pem";
+
+        # The initial cluster describes the first bootstrap shape. Persisted etcd
+        # state becomes authoritative after bootstrap, so later membership changes
+        # use explicit etcdctl member operations instead of inventory churn.
+        initialCluster = initialCluster;
+        initialClusterState = "new";
+        initialClusterToken = "jorthaus-etcd";
       };
-    };
-
-    services.etcd = {
-      enable = true;
-      name = host.hostname;
-      dataDir = "/srv/etcd";
-
-      listenClientUrls = [ "https://0.0.0.0:${toString clientPort}" ];
-      advertiseClientUrls = [ "https://${nodeDnsName}:${toString clientPort}" ];
-
-      listenPeerUrls = [ "https://0.0.0.0:${toString peerPort}" ];
-      initialAdvertisePeerUrls = [ "https://${nodeDnsName}:${toString peerPort}" ];
-
-      certFile = "${certDir}/fullchain.pem";
-      keyFile = "${certDir}/key.pem";
-      peerCertFile = "${certDir}/fullchain.pem";
-      peerKeyFile = "${certDir}/key.pem";
-
-      # The initial cluster describes the first bootstrap shape. Persisted etcd
-      # state becomes authoritative after bootstrap, so later membership changes
-      # use explicit etcdctl member operations instead of inventory churn.
-      initialCluster = initialCluster;
-      initialClusterState = "new";
-      initialClusterToken = "jorthaus-etcd";
-    };
     })
   ];
 }

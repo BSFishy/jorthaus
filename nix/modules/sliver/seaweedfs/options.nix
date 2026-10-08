@@ -15,9 +15,9 @@ let
     )
   );
   dataplaneHosts = lib.sort (a: b: a.hostname < b.hostname) (
-    lib.filter (
-      peer: peer.slivers.seaweedfs.enable && peer.install.dataDisks != [ ]
-    ) (builtins.attrValues hostInventory)
+    lib.filter (peer: peer.slivers.seaweedfs.enable && peer.install.dataDisks != [ ]) (
+      builtins.attrValues hostInventory
+    )
   );
   systemdServices =
     lib.optionals (controlplaneHosts != [ ]) [
@@ -408,30 +408,30 @@ in
   config = lib.mkMerge [
     { jorthaus.prometheus.systemdServices = systemdServices; }
     (lib.mkIf host.slivers.seaweedfs.enable {
-    jorthaus.prometheus.localSystemdServices =
-      lib.optionals controlplaneEnabled [
-        "seaweedfs-master.service"
-        "seaweedfs-filer.service"
-      ]
-      ++ lib.optionals dataplaneEnabled [ "seaweedfs-volume.service" ];
-    assertions = [
-      {
-        assertion = controlplaneEnabled || dataplaneEnabled;
-        message = "The seaweedfs sliver requires either role=\"controlplane\" or at least one install.dataDisks entry.";
-      }
-      {
-        assertion = controlplaneHosts != [ ];
-        message = "The seaweedfs sliver requires at least one enabled seaweedfs controlplane node.";
-      }
-      {
-        assertion = (!controlplaneEnabled) || postgresHosts != [ ];
-        message = "The seaweedfs controlplane requires at least one enabled postgres node.";
-      }
-      {
-        assertion = (!dataplaneEnabled) || config.jorthaus.seaweedfs.volume.dirs != [ ];
-        message = "The seaweedfs dataplane requires at least one derived volume directory.";
-      }
-    ];
+      jorthaus.prometheus.localSystemdServices =
+        lib.optionals controlplaneEnabled [
+          "seaweedfs-master.service"
+          "seaweedfs-filer.service"
+        ]
+        ++ lib.optionals dataplaneEnabled [ "seaweedfs-volume.service" ];
+      assertions = [
+        {
+          assertion = controlplaneEnabled || dataplaneEnabled;
+          message = "The seaweedfs sliver requires either role=\"controlplane\" or at least one install.dataDisks entry.";
+        }
+        {
+          assertion = controlplaneHosts != [ ];
+          message = "The seaweedfs sliver requires at least one enabled seaweedfs controlplane node.";
+        }
+        {
+          assertion = (!controlplaneEnabled) || postgresHosts != [ ];
+          message = "The seaweedfs controlplane requires at least one enabled postgres node.";
+        }
+        {
+          assertion = (!dataplaneEnabled) || config.jorthaus.seaweedfs.volume.dirs != [ ];
+          message = "The seaweedfs dataplane requires at least one derived volume directory.";
+        }
+      ];
     })
   ];
 }
