@@ -56,9 +56,8 @@ resource "vault_approle_auth_backend_role" "openbao_raft_backup" {
   secret_id_ttl      = 0
   secret_id_num_uses = 0
 
-  token_no_default_policy = true
-  token_type              = "service"
-  token_period            = 86400
-  token_ttl               = 3600
-  token_max_ttl           = 14400
+  token_type    = "service"
+  token_period  = 86400
+  token_ttl     = 3600
+  token_max_ttl = 14400
 }
