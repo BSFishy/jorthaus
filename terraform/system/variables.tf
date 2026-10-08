@@ -123,3 +123,15 @@ variable "openbao_backup_restic_prefix" {
   description = "Object key prefix inside the OpenBao backup bucket for the Restic repository."
   default     = "restic/openbao/"
 }
+
+variable "victorialogs_backup_bucket_name" {
+  type        = string
+  description = "Globally unique private Backblaze B2 bucket name for VictoriaLogs partition snapshots."
+  default     = "jorthaus-victorialogs-backups"
+}
+
+variable "victorialogs_backup_restic_prefix" {
+  type        = string
+  description = "Object key prefix inside the VictoriaLogs backup bucket for the Restic repository."
+  default     = "restic/victorialogs/"
+}

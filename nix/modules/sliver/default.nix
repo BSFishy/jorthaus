@@ -11,6 +11,7 @@ _:
     ./k3s.nix
     ./seaweedfs
     ./victorialogs.nix
+    ./victorialogs-backup.nix
     ./fluent-bit.nix
     ./prometheus
     ./xfs-quotas.nix

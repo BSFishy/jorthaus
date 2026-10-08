@@ -1,0 +1,26 @@
+rule_files:
+  - rules.yml
+evaluation_interval: 1h
+tests:
+  - interval: 1h
+    input_series:
+      - series: 'victorialogs_backup_last_success_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '0+3600x48'
+    alert_rule_test:
+      - eval_time: 48h
+        alertname: VictoriaLogsBackupStale
+        exp_alerts: []
+  - interval: 1h
+    input_series:
+      - series: 'victorialogs_backup_last_success_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '0+0x48'
+    alert_rule_test:
+      - eval_time: 48h
+        alertname: VictoriaLogsBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              sliver: victorialogs
+            exp_annotations:
+              summary: "VictoriaLogs backup is stale"
+              description: "No successful VictoriaLogs partition snapshot backup has been recorded in the last 36 hours."

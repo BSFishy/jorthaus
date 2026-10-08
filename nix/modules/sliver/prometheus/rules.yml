@@ -613,3 +613,16 @@ groups:
         annotations:
           summary: "OpenBao Raft backup is stale"
           description: "No verified OpenBao Raft snapshot has been backed up in the last 36 hours."
+  - name: victorialogs-backup-health
+    rules:
+      - alert: VictoriaLogsBackupStale
+        expr: |
+          time() - max(victorialogs_backup_last_success_timestamp_seconds{job="node"}) > 36 * 60 * 60
+          or absent(victorialogs_backup_last_success_timestamp_seconds{job="node"})
+        for: 15m
+        labels:
+          severity: warning
+          sliver: victorialogs
+        annotations:
+          summary: "VictoriaLogs backup is stale"
+          description: "No successful VictoriaLogs partition snapshot backup has been recorded in the last 36 hours."

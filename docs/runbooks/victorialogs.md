@@ -18,10 +18,10 @@ VictoriaLogs retains entries for 31 days and begins removing old partitions when
 its data directory exceeds 90 GiB.
 
 The replicas have separate local storage. A record is present on every replica
-only when its producer delivers that record to every endpoint. No automated
-backup or cross-replica synchronization exists. Fluent Bit fan-out is the
-planned producer for complete replicated collection and must pass its own
-outage tests before it is relied upon.
+only when its producer delivers that record to every endpoint; there is no
+cross-replica synchronization. The host-native Restic backup runs on Gaia-01,
+the lexicographically first VictoriaLogs host, and captures only that replica.
+It is best-effort and does not guarantee records that failed to reach Gaia-01.
 
 ## Health and storage checks
 
@@ -43,6 +43,67 @@ arguments, including retention settings, with:
 ssh matt@gaia-01.node.jort.haus \
   'systemctl show victorialogs -p ExecStart --value'
 ```
+
+## Backups
+
+The daily host-native backup runs on Gaia-01 at 12:30 UTC, one hour after the
+OpenBao backup schedule. The timer does not catch up missed runs. Its init,
+verification, and backup commands share a host-local lock. The backup asks
+VictoriaLogs for a native snapshot of each active
+daily partition, sends those snapshot directories to a dedicated encrypted
+Restic repository in Backblaze B2, then removes the temporary snapshots. The
+Restic repository keeps the latest snapshot and daily restore points for seven
+days; pruning runs after the scheduled backup on Sundays.
+
+B2 credentials and the Restic password are stored at
+`backup/data/victorialogs` in OpenBao. A dedicated AppRole and Vault Agent
+render them into a private runtime file on Gaia-01. The backup service runs as
+`victorialogs-backup`, with read access to the VictoriaLogs data group. The
+partition-management endpoint is accessed over the node's internal address and
+is unauthenticated under the current VictoriaLogs configuration; keep port
+9428 restricted to the trusted network. Snapshot creation returns an array of
+paths; the backup validates each path against its partition and uses the
+VictoriaLogs snapshot-delete endpoint to remove temporary snapshots, including
+when the backup command fails.
+
+Terraform creates the AppRole and stores the B2 credentials and Restic password
+in OpenBao. After applying that Terraform plan, create the encrypted AppRole
+ID and SecretID files with `just create-victorialogs-backup-approle-secrets`.
+The NixOS module enables the backup services on Gaia-01 once both encrypted
+files are tracked in the flake source.
+
+Initialize the Restic repository once after provisioning and deploying the
+configuration:
+
+```bash
+just victorialogs-backup-init
+```
+
+To run a manual backup or validate the repository and preview retention:
+
+```bash
+just victorialogs-backup-run
+just victorialogs-backup-verify
+```
+
+Inspect the scheduled or manual backup result without exposing credential data:
+
+```bash
+ssh matt@gaia-01.node.jort.haus \\
+  'sudo journalctl -u victorialogs-backup.service --since today --no-pager'
+```
+
+The service reports the Restic snapshot ID on success. Its last-success metric
+is `victorialogs_backup_last_success_timestamp_seconds`; the
+`VictoriaLogsBackupStale` alert fires when it is older than 36 hours. The
+verification service runs `restic check --read-data` and previews the seven-day
+retention policy without pruning.
+
+For recovery, first restore the selected Restic snapshot to a private temporary
+directory and verify the partition files. Before replacing a live partition,
+stop VictoriaLogs or detach that partition through the partition-management
+API; after restoring its files, restart the service or reattach the partition.
+Never copy restored files over an attached, actively written partition.
 
 ## Direct ingestion and query
 

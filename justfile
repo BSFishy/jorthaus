@@ -44,7 +44,7 @@ nix-check:
 # validate static and generated Prometheus alert rules
 [group('nix')]
 prometheus-rules-test:
-  nix-shell -p prometheus.cli python3 --run 'promtool check rules nix/modules/sliver/prometheus/rules.yml && promtool test rules nix/modules/sliver/prometheus/rules.test.yml && promtool test rules nix/modules/sliver/prometheus/openbao-backup-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-resource-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/xfs-quota-rules.test.yml && scripts/test-xfs-project-quota-metrics && scripts/test-prometheus-systemd-rules'
+  nix-shell -p prometheus.cli python3 --run 'promtool check rules nix/modules/sliver/prometheus/rules.yml && promtool test rules nix/modules/sliver/prometheus/rules.test.yml && promtool test rules nix/modules/sliver/prometheus/openbao-backup-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/victorialogs-backup-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-resource-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/xfs-quota-rules.test.yml && scripts/test-xfs-project-quota-metrics && scripts/test-prometheus-systemd-rules'
 
 # ssh into a nixos node
 [group('nix')]
@@ -152,6 +152,18 @@ create-openbao-backup-approle-secrets:
   bao write -f -field=secret_id auth/approle/role/openbao-raft-backup/secret-id \
     | agenix -e "$secret_id_file"
 
+[script]
+[group('secret')]
+create-victorialogs-backup-approle-secrets:
+  set -euo pipefail
+  role_id_file=secrets/victorialogs-backup-approle-role-id.age
+  secret_id_file=secrets/victorialogs-backup-approle-secret-id.age
+  test ! -e "$role_id_file" && test ! -e "$secret_id_file"
+  bao read -field=role_id auth/approle/role/victorialogs-backup/role-id \
+    | agenix -e "$role_id_file"
+  bao write -f -field=secret_id auth/approle/role/victorialogs-backup/secret-id \
+    | agenix -e "$secret_id_file"
+
 # Initialize the OpenBao Restic repository once on a deployed host.
 [group('openbao')]
 openbao-backup-init host:
@@ -167,3 +179,19 @@ openbao-backup-run host:
 openbao-backup-verify host:
   ssh matt@{{host}}.node.jort.haus sudo systemctl start openbao-raft-backup-verify.service
   ssh matt@{{host}}.node.jort.haus sudo systemctl start openbao-raft-backup-metrics.service
+
+# Initialize the VictoriaLogs Restic repository once on the selected backup host.
+[group('victorialogs')]
+victorialogs-backup-init:
+  ssh matt@gaia-01.node.jort.haus sudo systemctl start victorialogs-backup-init.service
+
+# Run a VictoriaLogs partition snapshot backup on the selected backup host.
+[group('victorialogs')]
+victorialogs-backup-run:
+  ssh matt@gaia-01.node.jort.haus sudo systemctl start victorialogs-backup.service
+
+# Check the VictoriaLogs Restic repository and preview its retention policy.
+[group('victorialogs')]
+victorialogs-backup-verify:
+  ssh matt@gaia-01.node.jort.haus sudo systemctl start victorialogs-backup-verify.service
+  ssh matt@gaia-01.node.jort.haus sudo systemctl start victorialogs-backup-metrics.service

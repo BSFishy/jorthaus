@@ -123,3 +123,9 @@ plan-system:
 [working-directory: 'terraform/system']
 apply-system:
   TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN" tofu apply
+
+# import the VictoriaLogs AppRole after an interrupted system Terraform apply
+[group('terraform')]
+[working-directory: 'terraform/system']
+import-victorialogs-backup-approle:
+  tofu import vault_approle_auth_backend_role.victorialogs_backup auth/approle/role/victorialogs-backup

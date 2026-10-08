@@ -34,6 +34,7 @@ let
     gaia-05
   ];
   seaweedfs-s3-provisioner-hosts = [ gaia-01 ];
+  victorialogs-backup-hosts = [ gaia-01 ];
   k3s-hosts = [
     matt
     gaia-01
@@ -64,6 +65,8 @@ in
   "secrets/openbao-backup-credentials.age".publicKeys = openbao-hosts;
   "secrets/openbao-backup-approle-role-id.age".publicKeys = openbao-hosts;
   "secrets/openbao-backup-approle-secret-id.age".publicKeys = openbao-hosts;
+  "secrets/victorialogs-backup-approle-role-id.age".publicKeys = victorialogs-backup-hosts;
+  "secrets/victorialogs-backup-approle-secret-id.age".publicKeys = victorialogs-backup-hosts;
 
   "secrets/patroni-postgres-superuser-password.age".publicKeys = postgres-hosts;
   "secrets/postgres-exporter-password.age".publicKeys = postgres-hosts;
