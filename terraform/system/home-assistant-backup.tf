@@ -2,6 +2,11 @@ resource "b2_bucket" "home_assistant_backups" {
   bucket_name = var.home_assistant_backup_bucket_name
   bucket_type = "allPrivate"
 
+  default_server_side_encryption {
+    algorithm = "AES256"
+    mode      = "SSE-B2"
+  }
+
   lifecycle_rules {
     file_name_prefix = var.home_assistant_backup_prefix
 

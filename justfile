@@ -44,7 +44,7 @@ nix-check:
 # validate static and generated Prometheus alert rules
 [group('nix')]
 prometheus-rules-test:
-  nix-shell -p prometheus.cli python3 --run 'promtool check rules nix/modules/sliver/prometheus/rules.yml && promtool test rules nix/modules/sliver/prometheus/rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-resource-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/xfs-quota-rules.test.yml && scripts/test-xfs-project-quota-metrics && scripts/test-prometheus-systemd-rules'
+  nix-shell -p prometheus.cli python3 --run 'promtool check rules nix/modules/sliver/prometheus/rules.yml && promtool test rules nix/modules/sliver/prometheus/rules.test.yml && promtool test rules nix/modules/sliver/prometheus/openbao-backup-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/kubernetes-resource-rules.test.yml && promtool test rules nix/modules/sliver/prometheus/xfs-quota-rules.test.yml && scripts/test-xfs-project-quota-metrics && scripts/test-prometheus-systemd-rules'
 
 # ssh into a nixos node
 [group('nix')]
@@ -139,3 +139,31 @@ create-prometheus-app-metrics-token mode='create':
 [group('secret')]
 openbao-key name:
   just secret-random {{name}} 32
+
+[script]
+[group('secret')]
+create-openbao-backup-approle-secrets:
+  set -euo pipefail
+  role_id_file=secrets/openbao-backup-approle-role-id.age
+  secret_id_file=secrets/openbao-backup-approle-secret-id.age
+  test ! -e "$role_id_file" && test ! -e "$secret_id_file"
+  bao read -field=role_id auth/approle/role/openbao-raft-backup/role-id \
+    | agenix -e "$role_id_file"
+  bao write -f -field=secret_id auth/approle/role/openbao-raft-backup/secret-id \
+    | agenix -e "$secret_id_file"
+
+# Initialize the OpenBao Restic repository once on a deployed host.
+[group('openbao')]
+openbao-backup-init host:
+  ssh matt@{{host}}.node.jort.haus sudo systemctl start openbao-raft-backup-init.service
+
+# Run the host-native OpenBao backup once on the selected node.
+[group('openbao')]
+openbao-backup-run host:
+  ssh matt@{{host}}.node.jort.haus sudo systemctl start openbao-raft-backup.service
+
+# Check the Restic repository and preview the configured retention policy.
+[group('openbao')]
+openbao-backup-verify host:
+  ssh matt@{{host}}.node.jort.haus sudo systemctl start openbao-raft-backup-verify.service
+  ssh matt@{{host}}.node.jort.haus sudo systemctl start openbao-raft-backup-metrics.service

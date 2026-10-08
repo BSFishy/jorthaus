@@ -2,6 +2,11 @@ resource "b2_bucket" "minecraft_backups" {
   bucket_name = var.minecraft_backup_bucket_name
   bucket_type = "allPrivate"
 
+  default_server_side_encryption {
+    algorithm = "AES256"
+    mode      = "SSE-B2"
+  }
+
   lifecycle_rules {
     file_name_prefix = var.minecraft_backup_restic_prefix
 

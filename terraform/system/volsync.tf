@@ -2,6 +2,11 @@ resource "b2_bucket" "forgejo_volsync" {
   bucket_name = var.forgejo_volsync_bucket_name
   bucket_type = "allPrivate"
 
+  default_server_side_encryption {
+    algorithm = "AES256"
+    mode      = "SSE-B2"
+  }
+
   lifecycle_rules {
     file_name_prefix = var.forgejo_volsync_restic_prefix
 
@@ -71,6 +76,11 @@ resource "vault_kubernetes_auth_backend_role" "forgejo_volsync" {
 resource "b2_bucket" "hister_volsync" {
   bucket_name = var.hister_volsync_bucket_name
   bucket_type = "allPrivate"
+
+  default_server_side_encryption {
+    algorithm = "AES256"
+    mode      = "SSE-B2"
+  }
 
   lifecycle_rules {
     file_name_prefix = var.hister_volsync_restic_prefix

@@ -61,6 +61,9 @@ in
 {
   "secrets/acme-vars.age".publicKeys = all;
   "secrets/openbao-key-2026-08-23.age".publicKeys = openbao-hosts;
+  "secrets/openbao-backup-credentials.age".publicKeys = openbao-hosts;
+  "secrets/openbao-backup-approle-role-id.age".publicKeys = openbao-hosts;
+  "secrets/openbao-backup-approle-secret-id.age".publicKeys = openbao-hosts;
 
   "secrets/patroni-postgres-superuser-password.age".publicKeys = postgres-hosts;
   "secrets/postgres-exporter-password.age".publicKeys = postgres-hosts;

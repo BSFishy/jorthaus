@@ -600,3 +600,16 @@ groups:
         annotations:
           summary: "XFS project quota metrics are stale on {{ $labels.host }}"
           description: "The last quota collection attempt for {{ $labels.filesystem }} was more than 3 minutes ago."
+  - name: openbao-backup-health
+    rules:
+      - alert: OpenBaoBackupStale
+        expr: |
+          time() - max(openbao_raft_backup_last_success_timestamp_seconds{job="node"}) > 36 * 60 * 60
+          or absent(openbao_raft_backup_last_success_timestamp_seconds{job="node"})
+        for: 15m
+        labels:
+          severity: critical
+          sliver: openbao
+        annotations:
+          summary: "OpenBao Raft backup is stale"
+          description: "No verified OpenBao Raft snapshot has been backed up in the last 36 hours."

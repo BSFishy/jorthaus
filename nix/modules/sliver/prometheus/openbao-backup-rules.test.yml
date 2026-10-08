@@ -1,0 +1,32 @@
+rule_files:
+  - rules.yml
+evaluation_interval: 1h
+tests:
+  - interval: 1h
+    input_series:
+      - series: 'openbao_raft_backup_last_success_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '0+0x48'
+      - series: 'openbao_raft_backup_last_success_timestamp_seconds{job="node",host="gaia-02",instance="10.1.10.2:9100"}'
+        values: '100000+0x48'
+    alert_rule_test:
+      - eval_time: 48h
+        alertname: OpenBaoBackupStale
+        exp_alerts: []
+  - interval: 1h
+    input_series:
+      - series: 'openbao_raft_backup_last_success_timestamp_seconds{job="node",host="gaia-01",instance="10.1.10.1:9100"}'
+        values: '0+0x48'
+      - series: 'openbao_raft_backup_last_success_timestamp_seconds{job="node",host="gaia-02",instance="10.1.10.2:9100"}'
+        values: '0+0x48'
+      - series: 'openbao_raft_backup_last_success_timestamp_seconds{job="node",host="gaia-03",instance="10.1.10.3:9100"}'
+        values: '0+0x48'
+    alert_rule_test:
+      - eval_time: 48h
+        alertname: OpenBaoBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              sliver: openbao
+            exp_annotations:
+              summary: "OpenBao Raft backup is stale"
+              description: "No verified OpenBao Raft snapshot has been backed up in the last 36 hours."

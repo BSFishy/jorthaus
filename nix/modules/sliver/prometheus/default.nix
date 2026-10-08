@@ -26,9 +26,9 @@ let
     lib.filter (peer: peer.slivers.k3s.enable) (builtins.attrValues hostInventory)
   );
   controlPlaneHosts = lib.sort (a: b: a.hostname < b.hostname) (
-    lib.filter (
-      peer: peer.slivers.k3s.enable && peer.slivers.k3s.role == "controlplane"
-    ) (builtins.attrValues hostInventory)
+    lib.filter (peer: peer.slivers.k3s.enable && peer.slivers.k3s.role == "controlplane") (
+      builtins.attrValues hostInventory
+    )
   );
   isPrometheus = host.slivers.prometheus.enable;
   isAlertmanager = host.slivers.alertmanager.enable;
@@ -62,7 +62,10 @@ let
     };
   localPrometheusSystemdServices =
     lib.optionals host.slivers.nodeExporter.enable [ "prometheus-node-exporter.service" ]
-    ++ lib.optionals isPrometheus [ "prometheus.service" "thanos-sidecar.service" ]
+    ++ lib.optionals isPrometheus [
+      "prometheus.service"
+      "thanos-sidecar.service"
+    ]
     ++ lib.optionals isAlertmanager [ "alertmanager.service" ];
   hostTarget = peer: "${peer.ipam.ipv4.address}:9100";
   postgresTarget = peer: "${peer.ipam.ipv4.address}:9187";
@@ -98,7 +101,11 @@ let
     namespaces.names = [ namespace ];
   };
   appMetricsRelabelConfigs =
-    { serviceName, portName, requireOptIn ? true }:
+    {
+      serviceName,
+      portName,
+      requireOptIn ? true,
+    }:
     [
       {
         source_labels = [ "__meta_kubernetes_endpoint_ready" ];
@@ -131,23 +138,18 @@ let
         action = "keep";
       }
     ];
-  applicationMetricRuntimeAllowlist =
-    "process_cpu_seconds_total|process_resident_memory_bytes|process_start_time_seconds|go_goroutines|go_gc_duration_seconds(_.*)?|go_memstats_.*";
+  applicationMetricRuntimeAllowlist = "process_cpu_seconds_total|process_resident_memory_bytes|process_start_time_seconds|go_goroutines|go_gc_duration_seconds(_.*)?|go_memstats_.*";
   traefikMetricAllowlist = "^(traefik_.*|${applicationMetricRuntimeAllowlist})$";
   certManagerMetricAllowlist = "^(certmanager_.*|controller_runtime_.*|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
-  authentikServerMetricAllowlist =
-    "^(authentik_(admin_workers|outposts_connected|outposts_last_update|tasks_queued|tasks_workers|flows_cached|flows_plan_time_(bucket|count|sum)|flows_stage_time_(bucket|count|sum)|flows_execution_stage_time_(bucket|count|sum)|policies_cached|policies_execution_time_(bucket|count|sum)|policies_engine_time_total_seconds_(bucket|count|sum)|property_mapping_execution_time_(bucket|count|sum)|main_request_duration_seconds(_count|_sum)?)|django_http_(requests_latency_seconds_by_view_method_(bucket|count|sum)|requests_latency_including_middlewares_seconds_(bucket|count|sum)|requests_total_by_view_transport_method_total|responses_total_by_status_view_method_total|responses_total_by_status_total)|django_db_(query_duration_seconds_(bucket|count|sum)|execute_total|new_connections_total|new_connection_errors_total)|${applicationMetricRuntimeAllowlist})$";
-  authentikWorkerMetricAllowlist =
-    "^(authentik_(admin_workers|tasks_(queued|in_progress|total|errors_total|retries_total|workers|duration_milliseconds_(bucket|count|sum))|policies_cached|policies_execution_time_(bucket|count|sum)|policies_engine_time_total_seconds_(bucket|count|sum))|django_db_(query_duration_seconds_(bucket|count|sum)|execute_total|execute_many_total|new_connections_total|new_connection_errors_total)|${applicationMetricRuntimeAllowlist})$";
-  seaweedCsiMetricAllowlist =
-    "^(csi_sidecar_operations_seconds_(bucket|count|sum)|workqueue_.*|process_start_time_seconds|${applicationMetricRuntimeAllowlist})$";
+  authentikServerMetricAllowlist = "^(authentik_(admin_workers|outposts_connected|outposts_last_update|tasks_queued|tasks_workers|flows_cached|flows_plan_time_(bucket|count|sum)|flows_stage_time_(bucket|count|sum)|flows_execution_stage_time_(bucket|count|sum)|policies_cached|policies_execution_time_(bucket|count|sum)|policies_engine_time_total_seconds_(bucket|count|sum)|property_mapping_execution_time_(bucket|count|sum)|main_request_duration_seconds(_count|_sum)?)|django_http_(requests_latency_seconds_by_view_method_(bucket|count|sum)|requests_latency_including_middlewares_seconds_(bucket|count|sum)|requests_total_by_view_transport_method_total|responses_total_by_status_view_method_total|responses_total_by_status_total)|django_db_(query_duration_seconds_(bucket|count|sum)|execute_total|new_connections_total|new_connection_errors_total)|${applicationMetricRuntimeAllowlist})$";
+  authentikWorkerMetricAllowlist = "^(authentik_(admin_workers|tasks_(queued|in_progress|total|errors_total|retries_total|workers|duration_milliseconds_(bucket|count|sum))|policies_cached|policies_execution_time_(bucket|count|sum)|policies_engine_time_total_seconds_(bucket|count|sum))|django_db_(query_duration_seconds_(bucket|count|sum)|execute_total|execute_many_total|new_connections_total|new_connection_errors_total)|${applicationMetricRuntimeAllowlist})$";
+  seaweedCsiMetricAllowlist = "^(csi_sidecar_operations_seconds_(bucket|count|sum)|workqueue_.*|process_start_time_seconds|${applicationMetricRuntimeAllowlist})$";
   ciliumEnvoyMetricAllowlist = "^(envoy_.*|${applicationMetricRuntimeAllowlist})$";
   ciliumOperatorMetricAllowlist = "^(cilium_.*|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
   ciliumAgentMetricAllowlist = "^(cilium_.*|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
   corednsMetricAllowlist = "^(coredns_.*|${applicationMetricRuntimeAllowlist})$";
   kuredMetricAllowlist = "^(kured_.*|promhttp_.*|${applicationMetricRuntimeAllowlist})$";
-  secretsStoreMetricAllowlist =
-    "^(certwatcher_.*|controller_runtime_.*|node_(publish|unpublish)_.*|rotation_reconcile_.*|rest_client_requests_total|target_info|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
+  secretsStoreMetricAllowlist = "^(certwatcher_.*|controller_runtime_.*|node_(publish|unpublish)_.*|rotation_reconcile_.*|rest_client_requests_total|target_info|workqueue_.*|${applicationMetricRuntimeAllowlist})$";
   thanosMetricAllowlist = "^(thanos_.*|prometheus_.*|grpc_.*|http_.*|promhttp_.*|${applicationMetricRuntimeAllowlist})$";
   controlPlaneMetricAllowlist =
     "^("
@@ -267,28 +269,34 @@ let
       first = lib.head definitions;
     in
     lib.all (
-      service: service.severity == first.severity && service.sliver == first.sliver
+      service:
+      service.severity == first.severity
+      && service.sliver == first.sliver
+      && service.alertWhenInactive == first.alertWhenInactive
     ) definitions
   ) (map (service: service.unit) systemdUnitDefinitions);
-  systemdAlertRules = lib.concatMap (service: [
-    {
-      alert = "SystemdServiceFailed";
-      expr = ''
-        node_systemd_unit_state{
-          job="node",name="${service.unit}",state="failed"
-        } == 1
-      '';
-      for = "5m";
-      labels = {
-        inherit (service) severity sliver;
-        unit = service.unit;
-      };
-      annotations = {
-        summary = "Systemd unit {{ $labels.name }} failed on {{ $labels.host }}";
-        description = "Systemd unit {{ $labels.name }} has remained failed on {{ $labels.host }}.";
-      };
-    }
-    {
+  systemdAlertRules = lib.concatMap (
+    service:
+    [
+      {
+        alert = "SystemdServiceFailed";
+        expr = ''
+          node_systemd_unit_state{
+            job="node",name="${service.unit}",state="failed"
+          } == 1
+        '';
+        for = "5m";
+        labels = {
+          inherit (service) severity sliver;
+          unit = service.unit;
+        };
+        annotations = {
+          summary = "Systemd unit {{ $labels.name }} failed on {{ $labels.host }}";
+          description = "Systemd unit {{ $labels.name }} has remained failed on {{ $labels.host }}.";
+        };
+      }
+    ]
+    ++ lib.optional service.alertWhenInactive {
       alert = "SystemdServiceNotActive";
       expr = ''
         node_systemd_unit_state{
@@ -305,7 +313,7 @@ let
         description = "Systemd unit {{ $labels.name }} has remained inactive or transitional on {{ $labels.host }}.";
       };
     }
-  ]) systemdUnitDefinitions;
+  ) systemdUnitDefinitions;
   systemdServiceRuleFile = pkgs.writeText "jorthaus-systemd-service-alerts.yml" (
     builtins.toJSON {
       groups = [
@@ -333,9 +341,17 @@ in
             description = "Sliver or shared module that owns the unit.";
           };
           severity = lib.mkOption {
-            type = lib.types.enum [ "warning" "critical" ];
+            type = lib.types.enum [
+              "warning"
+              "critical"
+            ];
             default = "critical";
             description = "Severity for failed or inactive unit alerts.";
+          };
+          alertWhenInactive = lib.mkOption {
+            type = lib.types.bool;
+            default = true;
+            description = "Whether inactivity or a transitional state triggers an alert.";
           };
         };
       }

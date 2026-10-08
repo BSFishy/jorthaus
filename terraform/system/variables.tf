@@ -111,3 +111,15 @@ variable "hister_volsync_restic_prefix" {
   description = "Object key prefix inside the Hister VolSync bucket for its Restic repository."
   default     = "restic/hister/"
 }
+
+variable "openbao_backup_bucket_name" {
+  type        = string
+  description = "Globally unique private Backblaze B2 bucket name for OpenBao Raft snapshots."
+  default     = "jorthaus-openbao-backups"
+}
+
+variable "openbao_backup_restic_prefix" {
+  type        = string
+  description = "Object key prefix inside the OpenBao backup bucket for the Restic repository."
+  default     = "restic/openbao/"
+}

@@ -4,6 +4,7 @@ _:
   imports = [
     ./etcd.nix
     ./openbao.nix
+    ./openbao-backup.nix
     ./postgres
     ./pgbouncer.nix
     ./valkey.nix
