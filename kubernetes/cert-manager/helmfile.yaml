@@ -13,12 +13,30 @@ releases:
           enabled: true
         serviceLabels:
           prometheus.jort.haus/scrape: "true"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 160Mi
+          limits:
+            memory: 256Mi
         cainjector:
           serviceLabels:
             prometheus.jort.haus/scrape: "true"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 96Mi
+            limits:
+              memory: 192Mi
         webhook:
           serviceLabels:
             prometheus.jort.haus/scrape: "true"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
 
   - name: cert-manager-config
     namespace: cert-manager
