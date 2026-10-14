@@ -35,10 +35,10 @@ securityContext:
 resources:
   requests:
     cpu: "100m"
-    memory: "50Mi"
+    memory: "100Mi"
   limits:
     cpu: "100m"
-    memory: "50Mi"
+    memory: "100Mi"
 
 nodeSelector:
   kubernetes.io/os: linux
@@ -64,7 +64,7 @@ reconciler:
   resources:
     requests:
       cpu: "100m"
-      memory: "50Mi"
+      memory: "100Mi"
     limits:
       cpu: "100m"
-      memory: "50Mi"
+      memory: "100Mi"
