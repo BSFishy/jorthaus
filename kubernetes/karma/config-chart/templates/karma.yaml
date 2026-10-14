@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: karma
+  namespace: {{ .Release.Namespace }}
+data:
+  karma.yaml: |
+{{ .Files.Get "files/karma.yaml" | indent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: karma
+  namespace: {{ .Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karma
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: karma
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: karma
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ .Files.Get "files/karma.yaml" | sha256sum }}
+      labels:
+        app.kubernetes.io/name: karma
+    spec:
+      serviceAccountName: karma
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: karma
+          image: ghcr.io/prymitive/karma:v0.115
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/karma/karma.yaml
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/karma
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: karma
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: karma
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app.kubernetes.io/name: karma
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

@@ -23,4 +23,5 @@ helmfiles:
   - path: hister/helmfile.yaml
   - path: victorialogs/helmfile.yaml
   - path: thanos/helmfile.yaml
+  - path: karma/helmfile.yaml
   - path: minecraft/helmfile.yaml

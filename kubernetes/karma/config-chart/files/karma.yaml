@@ -1,0 +1,23 @@
+authentication:
+  header:
+    name: X-authentik-username
+    value_re: ^(.+)$
+alertmanager:
+  interval: 1m
+  servers:
+    - name: gaia-03
+      uri: http://10.1.10.3:9093
+      proxy: true
+    - name: gaia-04
+      uri: http://10.1.10.4:9093
+      proxy: true
+    - name: gaia-05
+      uri: http://10.1.10.5:9093
+      proxy: true
+karma:
+  name: Jorthaus Alertmanager
+listen:
+  address: 0.0.0.0
+  port: 8080
+log:
+  level: info
