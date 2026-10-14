@@ -25,3 +25,4 @@ helmfiles:
   - path: thanos/helmfile.yaml
   - path: karma/helmfile.yaml
   - path: minecraft/helmfile.yaml
+  - path: oneuptime/helmfile.yaml

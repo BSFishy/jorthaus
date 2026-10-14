@@ -339,6 +339,8 @@ in
             connectionLimit = 5;
           };
 
+          oneuptime.login = false;
+
           prometheus_exporter = {
             login = true;
             passwordFile = config.age.secrets.prometheus-postgres-exporter-password.path;
@@ -381,6 +383,15 @@ in
               owner = "hister";
               grantAllTo = [ "hister" ];
               defaultPrivilegesFor = [ "hister" ];
+            };
+          };
+
+          oneuptime = {
+            owner = "oneuptime";
+            schemas.public = {
+              owner = "oneuptime";
+              grantAllTo = [ "oneuptime" ];
+              defaultPrivilegesFor = [ "oneuptime" ];
             };
           };
         };
