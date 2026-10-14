@@ -58,9 +58,9 @@ server:
   resources:
     requests:
       cpu: 100m
-      memory: 512Mi
-    limits:
       memory: 1Gi
+    limits:
+      memory: 1536Mi
 
 worker:
   replicas: 2
