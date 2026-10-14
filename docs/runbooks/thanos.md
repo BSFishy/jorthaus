@@ -1,7 +1,9 @@
 # Thanos runbook
 
 This runbook covers the host-native Prometheus Sidecars and the Kubernetes
-Thanos Query, Store Gateway, and Compactor.
+Thanos Query, Store Gateway, and Compactor. The B2 backup design is deployed;
+see [Thanos B2 block backup plan](../plans/thanos-b2-backup.md) for its
+configuration and validation record.
 
 ## Data path and retention
 
@@ -31,6 +33,29 @@ read it through the `thanos-objstore` SecretProviderClass and the
 manifests or command output. Follow the [SeaweedFS grant rotation procedure](seaweedfs.md#grant-credential-rotation-and-recovery)
 when replacing the credential; CSI Secret updates do not refresh the Thanos
 processes' environment variables.
+
+## B2 block backup and isolated restore
+
+The `thanos-block-backup` CronJob runs every six hours at minute 17 UTC. Its
+init container replicates eligible blocks from SeaweedFS to B2; only after that
+succeeds does its container run a one-shot Compactor against B2. The B2
+Compactor applies 90-day retention at all resolutions and uses a dedicated
+10Gi working PVC. Keep the replication and B2 compaction steps serialized.
+
+The backup Job uses its own SeaweedFS list/read-only grant and B2 read/write
+key. Restore drills use the separate `thanos-block-restore-readonly`
+ServiceAccount and `thanos-block-restore-readonly-openbao` SecretProviderClass,
+which expose only the read-only B2 key. The corresponding OpenBao policy is
+limited to the restore secret path.
+
+For a restore drill, replicate B2 into a new disposable PVC using a local
+`FILESYSTEM` object-store destination. Run `thanos tools bucket verify` and
+`thanos tools bucket inspect` against that restored filesystem bucket, then
+query it with an isolated Thanos Store and Query using a timestamp inside the
+restored range. Never target the production SeaweedFS bucket or use the backup
+Job's read/write B2 key. Remove the scratch PVC, temporary Job/Pod, ConfigMap,
+and any CSI-synced restore Secret after the drill; retain the dedicated
+read-only ServiceAccount, role, and SecretProviderClass for future drills.
 
 ## Health and upload checks
 

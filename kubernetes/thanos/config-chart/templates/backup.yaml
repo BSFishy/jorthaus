@@ -1,0 +1,193 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thanos-block-backup
+  namespace: {{ .Release.Namespace }}
+data:
+  source-objstore.yaml: |
+    type: S3
+    config:
+      bucket: thanos
+      endpoint: s3.service.jort.haus:8443
+      region: us-east-1
+      aws_sdk_auth: true
+      bucket_lookup_type: path
+  destination-objstore.yaml: |
+    type: S3
+    config:
+      bucket: "$(B2_BUCKET_NAME)"
+      endpoint: "$(B2_ENDPOINT)"
+      region: "$(B2_REGION)"
+      access_key: "$(B2_ACCESS_KEY_ID)"
+      secret_key: "$(B2_SECRET_ACCESS_KEY)"
+      bucket_lookup_type: path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: thanos-block-backup-compact-data
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: seaweedfs-storage
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: thanos-block-backup
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: "17 0,6,12,18 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 21600
+      ttlSecondsAfterFinished: 259200
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: thanos-block-backup
+          automountServiceAccountToken: false
+          initContainers:
+            - name: replicate-blocks
+              image: quay.io/thanos/thanos:v0.42.4
+              imagePullPolicy: IfNotPresent
+              args:
+                - tools
+                - bucket
+                - replicate
+                - --objstore.config-file=/etc/thanos-block-backup/source-objstore.yaml
+                - --objstore-to.config-file=/etc/thanos-block-backup/destination-objstore.yaml
+                - --single-run
+                - --ignore-marked-for-deletion
+                - --compaction-min=1
+                - --compaction-max=4
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: source_access_key_id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: source_secret_access_key
+                - name: B2_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_access_key_id
+                - name: B2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_secret_access_key
+                - name: B2_BUCKET_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_bucket_name
+                - name: B2_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_endpoint
+                - name: B2_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_region
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              volumeMounts:
+                - name: backup-config
+                  mountPath: /etc/thanos-block-backup
+                  readOnly: true
+                - name: openbao-secrets
+                  mountPath: /mnt/secrets-store
+                  readOnly: true
+          containers:
+            - name: compact-b2-blocks
+              image: quay.io/thanos/thanos:v0.42.4
+              imagePullPolicy: IfNotPresent
+              args:
+                - compact
+                - --objstore.config-file=/etc/thanos-block-backup/destination-objstore.yaml
+                - --data-dir=/var/thanos-block-backup
+                - --no-wait
+                - --retention.resolution-raw=90d
+                - --retention.resolution-5m=90d
+                - --retention.resolution-1h=90d
+                - --delete-delay=48h
+                - --compact.concurrency=1
+                - --log.level=info
+              env:
+                - name: B2_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_access_key_id
+                - name: B2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_secret_access_key
+                - name: B2_BUCKET_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_bucket_name
+                - name: B2_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_endpoint
+                - name: B2_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: thanos-block-backup-credentials
+                      key: b2_region
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+                limits:
+                  cpu: "1"
+                  memory: 2Gi
+              volumeMounts:
+                - name: backup-config
+                  mountPath: /etc/thanos-block-backup
+                  readOnly: true
+                - name: openbao-secrets
+                  mountPath: /mnt/secrets-store
+                  readOnly: true
+                - name: compact-data
+                  mountPath: /var/thanos-block-backup
+          volumes:
+            - name: backup-config
+              configMap:
+                name: thanos-block-backup
+            - name: openbao-secrets
+              csi:
+                driver: secrets-store.csi.k8s.io
+                readOnly: true
+                volumeAttributes:
+                  secretProviderClass: thanos-block-backup-openbao
+            - name: compact-data
+              persistentVolumeClaim:
+                claimName: thanos-block-backup-compact-data

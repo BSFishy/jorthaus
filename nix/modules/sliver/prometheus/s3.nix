@@ -11,4 +11,12 @@
       "write"
     ];
   };
+
+  jorthaus.s3.grants.thanos-backup-source = {
+    bucket = "thanos";
+    permissions = [
+      "list"
+      "read"
+    ];
+  };
 }

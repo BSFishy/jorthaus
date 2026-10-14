@@ -135,3 +135,21 @@ variable "victorialogs_backup_restic_prefix" {
   description = "Object key prefix inside the VictoriaLogs backup bucket for the Restic repository."
   default     = "restic/victorialogs/"
 }
+
+variable "thanos_backup_bucket_name" {
+  type        = string
+  description = "Globally unique private Backblaze B2 bucket name for Thanos block backups."
+  default     = "jorthaus-thanos-backups"
+}
+
+variable "thanos_backup_s3_endpoint" {
+  type        = string
+  description = "S3-compatible Backblaze B2 endpoint used by Thanos block backup."
+  default     = "s3.us-east-005.backblazeb2.com"
+}
+
+variable "thanos_backup_aws_region" {
+  type        = string
+  description = "AWS region value used by Thanos for the Backblaze B2 backup bucket."
+  default     = "us-east-005"
+}
