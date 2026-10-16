@@ -11,7 +11,7 @@ strategy:
   type: Recreate
 
 image:
-  tag: 12.0.4
+  tag: 15.0.10
 
 serviceAccount:
   create: false
