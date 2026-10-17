@@ -1,0 +1,15 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: oneuptime
+  namespace: {{ .Release.Namespace }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`oneuptime.jort.haus`)
+      kind: Rule
+      services:
+        - name: oneuptime-nginx
+          port: 80
+  tls: {}

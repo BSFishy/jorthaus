@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script="$(cd "$(dirname "$0")" && pwd)/post-renderer.py"
+exec nix-shell -p python3 --run "python3 '$script'"

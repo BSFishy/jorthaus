@@ -1,5 +1,24 @@
+repositories:
+  - name: oneuptime
+    url: https://helm-chart.oneuptime.com/
+
+helmDefaults:
+  diffArgs:
+    - --dry-run=server
+
 releases:
   - name: oneuptime-config
     namespace: oneuptime
     createNamespace: true
     chart: ./config-chart
+
+  - name: oneuptime
+    namespace: oneuptime
+    createNamespace: true
+    chart: oneuptime/oneuptime
+    version: 14.0.56
+    postRenderer: ./post-renderer
+    needs:
+      - oneuptime/oneuptime-config
+    values:
+      - values/oneuptime.yaml

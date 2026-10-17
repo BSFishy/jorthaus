@@ -3,6 +3,7 @@ import datetime as dt
 import json
 import logging
 import os
+import socket
 import ssl
 import time
 import urllib.error
@@ -13,6 +14,12 @@ import urllib.request
 VAULT_ADDR = os.environ["VAULT_ADDR"].rstrip("/")
 VAULT_ROLE = os.environ["VAULT_ROLE"]
 POSTGRES_CREDS_PATH = os.environ["POSTGRES_CREDS_PATH"]
+VALKEY_CREDS_PATH = os.environ["VALKEY_CREDS_PATH"]
+VALKEY_HOSTS = [host.strip() for host in os.environ["VALKEY_HOSTS"].split(",") if host.strip()]
+VALKEY_PORT = int(os.environ.get("VALKEY_PORT", "6379"))
+VALKEY_DB = os.environ.get("VALKEY_DB", "1")
+VALKEY_CA_FILE = os.environ.get("VALKEY_CA_FILE", "/etc/ssl/certs/ca-certificates.crt")
+VALKEY_PROPAGATION_TIMEOUT = int(os.environ.get("VALKEY_PROPAGATION_TIMEOUT", "180"))
 NAMESPACE = os.environ["POD_NAMESPACE"]
 SECRET_NAME = "oneuptime-backend-credentials"
 ROTATION_SECONDS = int(os.environ.get("ROTATION_SECONDS", "604800"))
@@ -77,7 +84,64 @@ def read_dynamic_credentials(token, path):
         raise RuntimeError("dynamic credential response has no password")
     if not isinstance(lease_duration, int) or lease_duration < ROTATION_SECONDS * 2:
         raise RuntimeError("dynamic credential lease is shorter than the rotation safety window")
-    return username, password, lease_duration
+    return {
+        "username": username,
+        "password": password,
+        "lease_duration": lease_duration,
+        "valid_until": (
+            dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=lease_duration)
+        ).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    }
+
+
+def resp_command(stream, *arguments):
+    payload = [f"*{len(arguments)}\r\n".encode()]
+    for argument in arguments:
+        encoded = argument.encode()
+        payload.extend([f"${len(encoded)}\r\n".encode(), encoded, b"\r\n"])
+    stream.sendall(b"".join(payload))
+
+    response = bytearray()
+    while not response.endswith(b"\r\n"):
+        chunk = stream.recv(1)
+        if not chunk:
+            raise RuntimeError("Valkey closed the credential validation connection")
+        response.extend(chunk)
+    if response.startswith(b"-"):
+        raise RuntimeError("Valkey rejected the credential validation command")
+    if not response.startswith(b"+"):
+        raise RuntimeError("Valkey returned an unexpected credential validation response")
+    return response[1:-2].decode()
+
+
+def valkey_authenticates(host, username, password):
+    context = ssl.create_default_context(cafile=VALKEY_CA_FILE)
+    with socket.create_connection((host, VALKEY_PORT), timeout=5) as connection:
+        with context.wrap_socket(connection, server_hostname=host) as stream:
+            stream.settimeout(5)
+            if resp_command(stream, "AUTH", username, password) != "OK":
+                return False
+            if resp_command(stream, "SELECT", VALKEY_DB) != "OK":
+                return False
+            return resp_command(stream, "PING") == "PONG"
+
+
+def wait_for_valkey_credential(username, password):
+    if not VALKEY_HOSTS:
+        raise RuntimeError("no Valkey nodes are configured for credential validation")
+    deadline = time.monotonic() + VALKEY_PROPAGATION_TIMEOUT
+    while time.monotonic() < deadline:
+        ready = True
+        for host in VALKEY_HOSTS:
+            try:
+                if not valkey_authenticates(host, username, password):
+                    ready = False
+            except Exception:
+                ready = False
+        if ready:
+            return
+        time.sleep(5)
+    raise RuntimeError("dynamic Valkey credentials did not authenticate on every node")
 
 
 def k8s_context():
@@ -146,7 +210,7 @@ def store_backend_secret(credentials, issued_at, valid_until, existing):
 
 
 def rollout_consumers(issued_at):
-    selector = urllib.parse.quote("app.kubernetes.io/instance=oneuptime", safe="")
+    selector = urllib.parse.quote("appname=oneuptime", safe="")
     path = f"/apis/apps/v1/namespaces/{NAMESPACE}/deployments?labelSelector={selector}"
     deployments = request_json(
         k8s_url(path), headers=k8s_headers(), context=k8s_context()
@@ -200,34 +264,48 @@ def sync_once():
 
     if due:
         if PENDING_CREDENTIALS is None:
-            token = vault_token()
-            postgres = read_dynamic_credentials(token, POSTGRES_CREDS_PATH)
-            issued_at = now.isoformat(timespec="seconds").replace("+00:00", "Z")
-            lease_duration = postgres[2]
-            valid_until = (now + dt.timedelta(seconds=lease_duration)).isoformat(
-                timespec="seconds"
-            ).replace("+00:00", "Z")
             PENDING_CREDENTIALS = {
-                "credentials": {
-                    "database-username": postgres[0],
-                    "database-password": postgres[1],
-                },
-                "issued_at": issued_at,
-                "valid_until": valid_until,
-                "lease_duration": lease_duration,
+                "issued_at": now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "postgres": None,
+                "valkey": None,
             }
 
+        if (
+            PENDING_CREDENTIALS["postgres"] is None
+            or PENDING_CREDENTIALS["valkey"] is None
+        ):
+            token = vault_token()
+            if PENDING_CREDENTIALS["postgres"] is None:
+                PENDING_CREDENTIALS["postgres"] = read_dynamic_credentials(
+                    token, POSTGRES_CREDS_PATH
+                )
+            if PENDING_CREDENTIALS["valkey"] is None:
+                PENDING_CREDENTIALS["valkey"] = read_dynamic_credentials(
+                    token, VALKEY_CREDS_PATH
+                )
+
+        valkey = PENDING_CREDENTIALS["valkey"]
+        wait_for_valkey_credential(valkey["username"], valkey["password"])
+
+        leases = [PENDING_CREDENTIALS["postgres"], valkey]
+        valid_until = min(lease["valid_until"] for lease in leases)
+        lease_duration = min(lease["lease_duration"] for lease in leases)
+        credentials = {
+            "database-username": PENDING_CREDENTIALS["postgres"]["username"],
+            "database-password": PENDING_CREDENTIALS["postgres"]["password"],
+            "valkey-username": valkey["username"],
+            "valkey-password": valkey["password"],
+        }
         store_backend_secret(
-            PENDING_CREDENTIALS["credentials"],
+            credentials,
             PENDING_CREDENTIALS["issued_at"],
-            PENDING_CREDENTIALS["valid_until"],
+            valid_until,
             existing,
         )
         issued_at = PENDING_CREDENTIALS["issued_at"]
-        lease_duration = PENDING_CREDENTIALS["lease_duration"]
         PENDING_CREDENTIALS = None
         logging.info(
-            "stored a new backend credential set with lease %d seconds",
+            "stored new PostgreSQL and Valkey credential pairs with minimum lease %d seconds",
             lease_duration,
         )
 

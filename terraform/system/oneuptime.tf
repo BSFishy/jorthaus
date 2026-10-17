@@ -15,6 +15,34 @@ resource "vault_database_secret_backend_connection" "oneuptime" {
   }
 }
 
+resource "vault_database_secret_backend_role" "oneuptime_valkey" {
+  backend = vault_mount.valkey.path
+  name    = "oneuptime"
+  db_name = vault_database_secret_backend_connection.valkey.name
+
+  creation_statements = [
+    jsonencode([
+      "resetdbs",
+      "db=1",
+      "~*",
+      "&*",
+      "+@read",
+      "+@write",
+      "+@connection",
+      "+@pubsub",
+      "+@scripting",
+      "+@transaction",
+      "+@blocking",
+      "-@admin",
+      "-@dangerous",
+      "+info",
+    ])
+  ]
+
+  default_ttl = 1209600
+  max_ttl     = 1209600
+}
+
 resource "vault_database_secret_backend_role" "oneuptime_postgres" {
   backend = vault_mount.postgres.path
   name    = "oneuptime"
@@ -110,6 +138,9 @@ resource "vault_policy" "oneuptime_credential_sync" {
       capabilities = ["read"]
     }
 
+    path "valkey/creds/oneuptime" {
+      capabilities = ["read"]
+    }
   EOT
 }
 
