@@ -164,6 +164,27 @@ create-victorialogs-backup-approle-secrets:
   bao write -f -field=secret_id auth/approle/role/victorialogs-backup/secret-id \
     | agenix -e "$secret_id_file"
 
+# Create and encrypt the shared OpenBao metal AppRole credentials.
+[script]
+[group('secret')]
+create-openbao-metal-approle-secrets:
+  set -euo pipefail
+  role_id_file=secrets/openbao-metal-role-id.age
+  secret_id_file=secrets/openbao-metal-secret-id.age
+  if [ ! -e "$role_id_file" ]; then
+    bao read -field=role_id auth/approle/role/metal-agent/role-id \
+      | agenix -e "$role_id_file"
+  fi
+  test ! -e "$secret_id_file"
+  bao write -f -field=secret_id auth/approle/role/metal-agent/secret-id \
+    | agenix -e "$secret_id_file"
+
+# Check whether the OpenBao metal mount and AppRole are readable without printing identifiers.
+[group('openbao')]
+openbao-metal-status:
+  if bao read sys/mounts/metal >/dev/null 2>&1; then echo 'metal mount: present'; else echo 'metal mount: absent'; fi
+  if bao read -field=role_id auth/approle/role/metal-agent/role-id >/dev/null 2>&1; then echo 'metal AppRole: present'; else echo 'metal AppRole: absent'; fi
+
 # Initialize the OpenBao Restic repository once on a deployed host.
 [group('openbao')]
 openbao-backup-init host:

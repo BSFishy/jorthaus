@@ -65,6 +65,8 @@ in
   "secrets/openbao-backup-credentials.age".publicKeys = openbao-hosts;
   "secrets/openbao-backup-approle-role-id.age".publicKeys = openbao-hosts;
   "secrets/openbao-backup-approle-secret-id.age".publicKeys = openbao-hosts;
+  "secrets/openbao-metal-role-id.age".publicKeys = all-nodes;
+  "secrets/openbao-metal-secret-id.age".publicKeys = all-nodes;
   "secrets/victorialogs-backup-approle-role-id.age".publicKeys = victorialogs-backup-hosts;
   "secrets/victorialogs-backup-approle-secret-id.age".publicKeys = victorialogs-backup-hosts;
 

@@ -129,3 +129,10 @@ apply-system:
 [working-directory: 'terraform/system']
 import-victorialogs-backup-approle:
   tofu import vault_approle_auth_backend_role.victorialogs_backup auth/approle/role/victorialogs-backup
+
+# Import the metal resources created by an interrupted system Terraform apply.
+[group('terraform')]
+[working-directory: 'terraform/system']
+import-openbao-metal:
+  tofu import vault_mount.metal metal
+  tofu import vault_approle_auth_backend_role.metal_agent auth/approle/role/metal-agent

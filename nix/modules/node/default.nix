@@ -13,6 +13,7 @@ _:
     ./impermanence.nix
     ./locale.nix
     ./networking.nix
+    ./openbao-agent.nix
     ./nix.nix
     ./sshd.nix
     ./users.nix
