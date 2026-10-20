@@ -30,6 +30,7 @@ in
     slivers.valkey.enable = mkEnableOption "the Valkey sliver";
     slivers.victorialogs.enable = mkEnableOption "the VictoriaLogs sliver";
     slivers.fluentBit.enable = mkEnableOption "the Fluent Bit sliver";
+    slivers.forgejoRunner.enable = mkEnableOption "Forgejo Actions runners";
     slivers.nodeExporter.enable = mkEnableOption "the Prometheus node exporter";
     slivers.prometheus.enable = mkEnableOption "the Prometheus server";
     slivers.alertmanager.enable = mkEnableOption "the Prometheus Alertmanager";

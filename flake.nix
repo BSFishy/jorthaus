@@ -78,6 +78,9 @@
               inherit pkgs system hostNames;
             };
             ssdp-relay-image = import ./nix/packages/ssdp-relay.nix { inherit pkgs; };
+          }
+          // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            forgejo-runner-vm-test = import ./nix/tests/forgejo-runner.nix { inherit pkgs; };
           };
 
           devShells.default = pkgs.mkShell {

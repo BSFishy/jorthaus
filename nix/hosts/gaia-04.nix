@@ -5,6 +5,7 @@
 
   slivers = {
     fluentBit.enable = true;
+    forgejoRunner.enable = true;
     nodeExporter.enable = true;
     alertmanager.enable = true;
     k3s = {

@@ -11,6 +11,7 @@
     valkey.enable = true;
     victorialogs.enable = true;
     fluentBit.enable = true;
+    forgejoRunner.enable = true;
     nodeExporter.enable = true;
     prometheus.enable = true;
     k3s = {

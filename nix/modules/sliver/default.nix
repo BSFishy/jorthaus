@@ -13,6 +13,7 @@ _:
     ./victorialogs.nix
     ./victorialogs-backup.nix
     ./fluent-bit.nix
+    ./forgejo-runner.nix
     ./prometheus
     ./xfs-quotas.nix
   ];

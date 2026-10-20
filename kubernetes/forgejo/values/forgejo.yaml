@@ -89,7 +89,9 @@ gitea:
       DISABLE_REGISTRATION: true
       REGISTER_MANUAL_CONFIRM: false
     actions:
-      ENABLED: false
+      ENABLED: true
+    packages:
+      CHUNKED_UPLOAD_PATH: tmp/package-upload
 
 extraVolumes:
   - name: secrets-store

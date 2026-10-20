@@ -41,6 +41,11 @@ nix-check:
   find . -name '*.nix' | xargs nil diagnostics --deny-warnings
   nix --option abort-on-warn true --option warn-dirty false flake check --all-systems
 
+# run the Forgejo Runner rootless BuildKit and resource-limit NixOS VM test
+[group('nix')]
+nix-test-forgejo-runner:
+  nix build --no-link -L .#forgejo-runner-vm-test
+
 # validate static and generated Prometheus alert rules
 [group('nix')]
 prometheus-rules-test:
@@ -184,6 +189,21 @@ create-openbao-metal-approle-secrets:
 openbao-metal-status:
   if bao read sys/mounts/metal >/dev/null 2>&1; then echo 'metal mount: present'; else echo 'metal mount: absent'; fi
   if bao read -field=role_id auth/approle/role/metal-agent/role-id >/dev/null 2>&1; then echo 'metal AppRole: present'; else echo 'metal AppRole: absent'; fi
+
+# Store a repository-scoped Forgejo Actions runner registration token in OpenBao without echoing it.
+[script]
+[group('openbao')]
+forgejo-runner-token-set:
+  set -euo pipefail
+  test -t 0 || { echo 'Run this recipe from an interactive terminal.' >&2; exit 1; }
+  printf 'Forgejo repository runner registration token: '
+  stty -echo
+  trap 'stty echo; unset token' EXIT HUP INT TERM
+  IFS= read -r token
+  stty echo
+  printf '\n'
+  test -n "$token"
+  printf '%s' "$token" | bao kv put -mount=metal forgejo/runner-registration token=-
 
 # Initialize the OpenBao Restic repository once on a deployed host.
 [group('openbao')]
