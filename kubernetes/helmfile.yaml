@@ -3,6 +3,7 @@ helmfiles:
   - path: volsync/helmfile.yaml
   - path: cilium-system/helmfile.yaml
   - path: openbao-csi/helmfile.yaml
+  - path: external-secrets/helmfile.yaml
   - path: kube-state-metrics/helmfile.yaml
   - path: kubelet-metrics/helmfile.yaml
   - path: control-plane-metrics/helmfile.yaml

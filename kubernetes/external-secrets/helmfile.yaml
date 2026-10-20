@@ -1,0 +1,12 @@
+repositories:
+  - name: external-secrets
+    url: https://charts.external-secrets.io
+
+releases:
+  - name: external-secrets
+    namespace: external-secrets
+    createNamespace: true
+    chart: external-secrets/external-secrets
+    version: 2.13.0
+    values:
+      - values/external-secrets.yaml
