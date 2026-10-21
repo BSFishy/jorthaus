@@ -92,6 +92,8 @@ gitea:
       ENABLED: true
     packages:
       CHUNKED_UPLOAD_PATH: tmp/package-upload
+    webhook:
+      ALLOWED_HOST_LIST: "external,agency.agency.svc.cluster.local"
 
 extraVolumes:
   - name: secrets-store
