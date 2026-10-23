@@ -69,7 +69,6 @@ let
     ++ lib.optionals isAlertmanager [ "alertmanager.service" ];
   hostTarget = peer: "${peer.ipam.ipv4.address}:9100";
   postgresTarget = peer: "${peer.ipam.ipv4.address}:9187";
-  postgresBootstrapHost = if postgresHosts == [ ] then null else lib.head postgresHosts;
   alertmanagerTarget = peer: "${peer.ipam.ipv4.address}:9093";
   prometheusTarget = peer: "${peer.ipam.ipv4.address}:9090";
   victorialogsTarget = peer: "${peer.ipam.ipv4.address}:9428";
@@ -438,13 +437,7 @@ in
           DATA_SOURCE_USER = "prometheus_exporter";
           DATA_SOURCE_PASS_FILE = config.age.secrets.prometheus-postgres-exporter-password.path;
         };
-      }
-      //
-        lib.optionalAttrs (postgresBootstrapHost != null && host.hostname == postgresBootstrapHost.hostname)
-          {
-            after = [ "jorthaus-postgres-ensure.service" ];
-            requires = [ "jorthaus-postgres-ensure.service" ];
-          };
+      };
     })
 
     (lib.mkIf isPrometheus {
