@@ -13,6 +13,9 @@ locals {
     authentik_provider_proxy.victorialogs.id,
     authentik_provider_proxy.thanos.id,
     authentik_provider_proxy.karma.id,
+    authentik_provider_proxy.sonarr.id,
+    authentik_provider_proxy.radarr.id,
+    authentik_provider_proxy.prowlarr.id,
   ]
 }
 

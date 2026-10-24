@@ -1,0 +1,18 @@
+{{- $apps := list (dict "name" "sonarr" "port" 8989) (dict "name" "radarr" "port" 7878) (dict "name" "prowlarr" "port" 9696) }}
+{{- range $app := $apps }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $app.name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    jort.haus/media-app: {{ $app.name }}
+  ports:
+    - name: http
+      port: {{ $app.port }}
+      targetPort: {{ $app.port }}
+      protocol: TCP
+{{- end }}

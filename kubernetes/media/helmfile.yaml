@@ -1,0 +1,35 @@
+releases:
+  - name: media-config
+    namespace: media
+    createNamespace: true
+    chart: ./config-chart
+
+  - name: sonarr
+    namespace: media
+    createNamespace: true
+    chart: oci://ghcr.io/bjw-s-labs/helm/app-template
+    version: 4.2.0
+    needs:
+      - media/media-config
+    values:
+      - values/sonarr.yaml
+
+  - name: radarr
+    namespace: media
+    createNamespace: true
+    chart: oci://ghcr.io/bjw-s-labs/helm/app-template
+    version: 4.2.0
+    needs:
+      - media/media-config
+    values:
+      - values/radarr.yaml
+
+  - name: prowlarr
+    namespace: media
+    createNamespace: true
+    chart: oci://ghcr.io/bjw-s-labs/helm/app-template
+    version: 4.2.0
+    needs:
+      - media/media-config
+    values:
+      - values/prowlarr.yaml

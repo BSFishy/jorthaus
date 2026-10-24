@@ -1,0 +1,83 @@
+controllers:
+  radarr:
+    pod:
+      labels:
+        jort.haus/media-app: radarr
+    containers:
+      app:
+        image:
+          repository: ghcr.io/home-operations/radarr
+          tag: 6.0.0.10217@sha256:176205e666410114cccbdcd69e38b748b24ee4a2fa83a2ba5d0d49559a496d68
+        env:
+          RADARR__APP__INSTANCENAME: Radarr
+          RADARR__AUTH__METHOD: External
+          RADARR__AUTH__REQUIRED: DisabledForLocalAddresses
+          RADARR__LOG__DBENABLED: "False"
+          RADARR__LOG__LEVEL: info
+          RADARR__SERVER__PORT: "7878"
+          TZ: Etc/UTC
+        probes:
+          liveness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /ping
+                port: 7878
+              periodSeconds: 10
+              timeoutSeconds: 2
+              failureThreshold: 3
+          startup:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /ping
+                port: 7878
+              periodSeconds: 10
+              timeoutSeconds: 2
+              failureThreshold: 60
+          readiness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /ping
+                port: 7878
+              periodSeconds: 10
+              timeoutSeconds: 2
+              failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+
+persistence:
+  config:
+    existingClaim: radarr-config
+    globalMounts:
+      - path: /config
+  tmp:
+    type: emptyDir
+    globalMounts:
+      - path: /tmp
+
+defaultPodOptions:
+  enableServiceLinks: false
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
