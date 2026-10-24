@@ -33,3 +33,15 @@ releases:
       - media/media-config
     values:
       - values/prowlarr.yaml
+
+  - name: recyclarr
+    namespace: media
+    createNamespace: true
+    chart: oci://ghcr.io/bjw-s-labs/helm/app-template
+    version: 4.2.0
+    needs:
+      - media/media-config
+      - media/sonarr
+      - media/radarr
+    values:
+      - values/recyclarr.yaml

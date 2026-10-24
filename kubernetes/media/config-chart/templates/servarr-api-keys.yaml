@@ -1,0 +1,33 @@
+{{- range list "sonarr" "radarr" }}
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: {{ . }}-api-key-generator
+  namespace: {{ $.Release.Namespace }}
+spec:
+  length: 32
+  digits: 8
+  symbols: 0
+  allowRepeat: true
+  secretKeys:
+    - password
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ . }}-api-key
+  namespace: {{ $.Release.Namespace }}
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: {{ . }}-api-key
+    creationPolicy: Owner
+    deletionPolicy: Retain
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: {{ . }}-api-key-generator
+{{- end }}

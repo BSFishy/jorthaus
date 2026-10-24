@@ -1,0 +1,78 @@
+controllers:
+  recyclarr:
+    type: cronjob
+    cronjob:
+      schedule: "0 0 * * *"
+      timeZone: Etc/UTC
+      startingDeadlineSeconds: 3600
+      concurrencyPolicy: Forbid
+      successfulJobsHistory: 1
+      failedJobsHistory: 1
+      ttlSecondsAfterFinished: 86400
+      backoffLimit: 0
+    pod:
+      restartPolicy: Never
+      labels:
+        jort.haus/media-app: recyclarr
+    containers:
+      app:
+        image:
+          repository: ghcr.io/recyclarr/recyclarr
+          tag: 7.4.1@sha256:759540877f95453eca8a26c1a93593e783a7a824c324fbd57523deffb67f48e1
+        args:
+          - sync
+          - --app-data
+          - /config
+          - --config
+          - /config/recyclarr.yml
+        env:
+          SONARR_API_KEY:
+            valueFrom:
+              secretKeyRef:
+                name: sonarr-api-key
+                key: password
+          RADARR_API_KEY:
+            valueFrom:
+              secretKeyRef:
+                name: radarr-api-key
+                key: password
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
+
+persistence:
+  config:
+    existingClaim: recyclarr-config
+    globalMounts:
+      - path: /config
+  config-file:
+    type: configMap
+    name: recyclarr-config
+    globalMounts:
+      - path: /config/recyclarr.yml
+        subPath: recyclarr.yml
+  tmp:
+    type: emptyDir
+    globalMounts:
+      - path: /tmp
+
+defaultPodOptions:
+  enableServiceLinks: false
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
