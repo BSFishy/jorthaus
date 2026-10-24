@@ -1,4 +1,4 @@
-{{- $apps := list (dict "name" "sonarr" "port" 8989) (dict "name" "radarr" "port" 7878) (dict "name" "prowlarr" "port" 9696) }}
+{{- $apps := list (dict "name" "sonarr" "port" 8989) (dict "name" "radarr" "port" 7878) (dict "name" "prowlarr" "port" 9696) (dict "name" "flaresolverr" "port" 8191) }}
 {{- range $app := $apps }}
 ---
 apiVersion: v1

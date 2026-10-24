@@ -34,6 +34,16 @@ releases:
     values:
       - values/prowlarr.yaml
 
+  - name: flaresolverr
+    namespace: media
+    createNamespace: true
+    chart: oci://ghcr.io/bjw-s-labs/helm/app-template
+    version: 4.2.0
+    needs:
+      - media/media-config
+    values:
+      - values/flaresolverr.yaml
+
   - name: recyclarr
     namespace: media
     createNamespace: true
