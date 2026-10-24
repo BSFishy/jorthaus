@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+set +x
+umask 077
+
+host=${1:?Usage: create-forgejo-runner <gaia-01..gaia-05>}
+case "$host" in gaia-01|gaia-02|gaia-03|gaia-04|gaia-05) ;; *) echo 'Unsupported runner host.' >&2; exit 2 ;; esac
+path="forgejo/runners/$host"
+if bao kv get -mount=metal -field=uuid "$path" >/dev/null 2>&1; then
+  echo "Runner credentials already exist at metal/$path." >&2
+  exit 1
+fi
+api_token=$(bao kv get -mount=metal -field=token forgejo/runner-provisioner)
+tmpdir=$(mktemp -d)
+keep=false
+cleanup() {
+  unset api_token runner_token stored_token
+  rm -f "$tmpdir/header"
+  if [[ "$keep" == true ]]; then
+    chmod -R go-rwx "$tmpdir" 2>/dev/null || true
+    echo "Runner response retained in protected recovery directory: $tmpdir" >&2
+  else
+    rm -rf "$tmpdir"
+  fi
+}
+trap cleanup EXIT
+printf 'Authorization: token %s\n' "$api_token" > "$tmpdir/header"
+unset api_token
+keep=true
+jq -n --arg name "$host" --arg description "Jorthaus runner on $host" '{name:$name,description:$description,ephemeral:false}' > "$tmpdir/request.json"
+curl --fail --silent --show-error --header "@$tmpdir/header" --header 'Content-Type: application/json' \
+  --data-binary "@$tmpdir/request.json" https://git.jort.haus/api/v1/admin/actions/runners \
+  --output "$tmpdir/runner.json"
+uuid=$(jq -er '.uuid | strings | select(length > 0)' "$tmpdir/runner.json")
+runner_token=$(jq -er '.token | strings | select(length > 0)' "$tmpdir/runner.json")
+printf '%s' "$runner_token" | bao kv put -mount=metal "$path" uuid="$uuid" token=- >/dev/null
+stored_token=$(bao kv get -mount=metal -field=token "$path")
+test "$stored_token" = "$runner_token"
+unset runner_token stored_token
+keep=false
+echo "Runner identity created and stored at metal/$path."

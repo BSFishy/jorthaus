@@ -12,7 +12,8 @@ let
   );
   enabled = host.slivers.forgejoRunner.enable;
   tokenFile = config.jorthaus.openbao.secrets.forgejoRunnerToken.filePath;
-  runnerService = "gitea-runner-forgejo";
+  uuidFile = config.jorthaus.openbao.secrets.forgejoRunnerUUID.filePath;
+  runnerService = "forgejo-runner-forgejo";
   runnerUnit = "${runnerService}.service";
   buildkitUnit = "buildkitd.service";
   buildkitUid = 1999;
@@ -57,8 +58,21 @@ in
       ];
 
       jorthaus.openbao.secrets.forgejoRunnerToken = {
-        path = "metal/forgejo/runner-registration";
-        template = "TOKEN={{ .Data.data.token }}";
+        path = "metal/forgejo/runners/${host.hostname}";
+        key = "token";
+        owner = "root";
+        group = "root";
+        mode = "0400";
+        consumers = [
+          {
+            unit = runnerUnit;
+            onChange = "restart";
+          }
+        ];
+      };
+      jorthaus.openbao.secrets.forgejoRunnerUUID = {
+        path = "metal/forgejo/runners/${host.hostname}";
+        key = "uuid";
         owner = "root";
         group = "root";
         mode = "0400";
@@ -91,19 +105,20 @@ in
         ];
       };
 
-      services.gitea-actions-runner = {
+      services.forgejo-runner = {
         package = pkgs.forgejo-runner;
         instances.forgejo = {
           enable = true;
-          name = host.hostname;
-          url = "https://git.jort.haus";
-          tokenFile = tokenFile;
-          labels = runnerLabels;
           settings = {
             runner = {
+              labels = runnerLabels;
               capacity = 1;
               timeout = "2h";
               shutdown_timeout = "15m";
+            };
+            server.connections.default = {
+              url = "https://git.jort.haus";
+              uuid = "@FORGEJO_RUNNER_UUID@";
             };
             container = {
               docker_host = "-";
@@ -113,12 +128,19 @@ in
             };
             cache.enabled = false;
           };
+          secrets.server.connections.default.token_url = tokenFile;
         };
       };
 
       systemd.services.${runnerService} = {
         requires = [ buildkitUnit ];
         after = [ buildkitUnit ];
+        preStart = ''
+          cp ${config.services.forgejo-runner.instances.forgejo.configFile} ./config.yaml
+          chmod u+w ./config.yaml
+          ${lib.getExe pkgs.replace-secret} "@FORGEJO_RUNNER_UUID@" "$CREDENTIALS_DIRECTORY/UUID" ./config.yaml
+          chmod u-w ./config.yaml
+        '';
         path = with pkgs; [
           bash
           coreutils
@@ -129,6 +151,9 @@ in
           util-linux
         ];
         serviceConfig = {
+          ExecStart = lib.mkForce "${pkgs.forgejo-runner}/bin/forgejo-runner daemon --config ./config.yaml";
+          LoadCredential = [ "UUID:${uuidFile}" ];
+          SupplementaryGroups = [ "buildkit" ];
           CPUQuota = "100%";
           MemoryMax = "2G";
           TasksMax = 512;

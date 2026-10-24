@@ -82,7 +82,7 @@ pkgs.testers.runNixOSTest {
   name = "jorthaus-forgejo-runner-rootless-buildkit";
 
   nodes.machine =
-    { ... }:
+    { config, ... }:
     {
       virtualisation.memorySize = 4096;
       virtualisation.diskSize = 12288;
@@ -119,34 +119,49 @@ pkgs.testers.runNixOSTest {
         };
       };
 
-      services.gitea-actions-runner = {
+      services.forgejo-runner = {
         package = pkgs.forgejo-runner;
         instances.standard = {
           enable = true;
-          name = "ci-standard";
-          url = "http://localhost:3000";
-          labels = [ "linux-x86_64:docker://test-image:latest" ];
-          tokenFile = "/var/lib/forgejo/runner_token";
           settings = {
             log = {
               level = "debug";
               job_level = "debug";
             };
+            runner.labels = [ "linux-x86_64:docker://test-image:latest" ];
             runner.capacity = 1;
+            server.connections.default = {
+              url = "http://localhost:3000";
+              uuid = "@UUID@";
+            };
             container = {
+              docker_host = "-";
               network = "host";
               privileged = false;
               valid_volumes = [ "/var/lib/buildkit/buildkitd.sock" ];
               options = "--cpus=1 --memory=6g --memory-swap=6g --pids-limit=2048 --group-add=1999 --volume=/var/lib/buildkit/buildkitd.sock:/var/lib/buildkit/buildkitd.sock";
             };
           };
+          secrets.server.connections.default.token_url = "/var/lib/forgejo/runner_token";
         };
       };
 
       virtualisation.podman.enable = true;
-      systemd.services.gitea-runner-standard = {
+      systemd.services.forgejo-runner-standard = {
         requires = [ "buildkitd.service" ];
         after = [ "buildkitd.service" ];
+        wantedBy = pkgs.lib.mkForce [ ];
+        preStart = ''
+          cp ${config.services.forgejo-runner.instances.standard.configFile} ./config.yaml
+          chmod u+w ./config.yaml
+          ${pkgs.lib.getExe pkgs.replace-secret} "@UUID@" "$CREDENTIALS_DIRECTORY/UUID" ./config.yaml
+          chmod u-w ./config.yaml
+        '';
+        serviceConfig = {
+          SupplementaryGroups = [ "buildkit" ];
+          ExecStart = pkgs.lib.mkForce "${pkgs.lib.getExe config.services.forgejo-runner.package} daemon --config ./config.yaml";
+          LoadCredential = [ "UUID:/var/lib/forgejo/runner_uuid" ];
+        };
       };
       systemd.services.buildkitd = {
         description = "Rootless BuildKit daemon for runner VM test";
@@ -195,7 +210,9 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         pkgs.buildkit
         pkgs.forgejo
+        pkgs.forgejo-runner
         pkgs.gitMinimal
+        pkgs.jq
         pkgs.podman
         pkgs.rootlesskit
         pkgs.runc
@@ -207,11 +224,6 @@ pkgs.testers.runNixOSTest {
 
   testScript = ''
     import json
-
-    def forgejo_admin(args):
-        return machine.succeed(
-            "su -l forgejo -c 'GITEA_WORK_DIR=/var/lib/forgejo forgejo " + args + "'"
-        )
 
     def tea_json(args):
         output = machine.succeed("tea " + args + " --login test -o json").strip()
@@ -259,15 +271,24 @@ pkgs.testers.runNixOSTest {
 
     with subtest("Load the test image and register the runner"):
         machine.succeed("podman load -i ${containerImage}")
-        token = forgejo_admin("actions generate-runner-token").strip()
-        machine.succeed("printf 'TOKEN=%s\\n' '" + token + "' > /var/lib/forgejo/runner_token")
-        machine.wait_for_unit("gitea-runner-standard.service")
+        tea_json("repos create --name repo --init")
+        machine.succeed(
+            "umask 077 && curl --fail --silent --show-error --user test:hunter2 "
+            "--header 'Content-Type: application/json' "
+            "--data-binary '{\"name\":\"ci-standard\",\"description\":\"VM test runner\",\"ephemeral\":false}' "
+            "http://localhost:3000/api/v1/admin/actions/runners "
+            "> /var/lib/forgejo/runner.json && "
+            "jq -er .uuid /var/lib/forgejo/runner.json > /var/lib/forgejo/runner_uuid && "
+            "jq -er .token /var/lib/forgejo/runner.json > /var/lib/forgejo/runner_token && "
+            "chmod 0600 /var/lib/forgejo/runner_uuid /var/lib/forgejo/runner_token /var/lib/forgejo/runner.json"
+        )
+        machine.systemctl("start forgejo-runner-standard.service")
+        machine.wait_for_unit("forgejo-runner-standard.service")
         machine.wait_until_succeeds(
-            "journalctl -u gitea-runner-standard.service --grep 'Runner registered successfully'"
+            "journalctl -u forgejo-runner-standard.service --grep 'declared successfully'"
         )
 
-    with subtest("Create a repository with a BuildKit workflow"):
-        tea_json("repos create --name repo --init")
+    with subtest("Create a BuildKit workflow"):
         machine.succeed("tea api -X PATCH /repos/test/repo --login test -f has_actions=true")
         machine.succeed(
             "tea api -X POST /repos/test/repo/contents/.forgejo%2Fworkflows%2Ftest.yaml "
@@ -287,7 +308,7 @@ pkgs.testers.runNixOSTest {
         else:
             diagnostics = machine.succeed(
                 "echo '=== runner journal ==='; "
-                "journalctl -u gitea-runner-standard.service -n 250 --no-pager || true; "
+                "journalctl -u forgejo-runner-standard.service -n 250 --no-pager || true; "
                 "echo '=== BuildKit service ==='; "
                 "systemctl status buildkitd.service --no-pager || true; "
                 "journalctl -u buildkitd.service -n 200 --no-pager || true; "

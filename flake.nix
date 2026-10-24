@@ -87,6 +87,9 @@
             packages = with pkgs; [
               git
               just
+              jq
+              coreutils
+              curl
               nil
               nixd
               nixfmt-tree

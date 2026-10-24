@@ -205,6 +205,26 @@ forgejo-runner-token-set:
   test -n "$token"
   printf '%s' "$token" | bao kv put -mount=metal forgejo/runner-registration token=-
 
+# Store the Forgejo API token used to provision global runners without echoing it.
+[script]
+[group('openbao')]
+forgejo-runner-api-token-set:
+  set -euo pipefail
+  test -t 0 || { echo 'Run this recipe from an interactive terminal.' >&2; exit 1; }
+  printf 'Forgejo global-runner API token: '
+  stty -echo
+  trap 'stty echo; unset token' EXIT HUP INT TERM
+  IFS= read -r token
+  stty echo
+  printf '\n'
+  test -n "$token"
+  printf '%s' "$token" | bao kv put -mount=metal forgejo/runner-provisioner token=- >/dev/null
+
+# Create a global runner and store its UUID and token in OpenBao.
+[group('openbao')]
+forgejo-runner-create host:
+  scripts/create-forgejo-runner '{{host}}'
+
 # Initialize the OpenBao Restic repository once on a deployed host.
 [group('openbao')]
 openbao-backup-init host:
