@@ -44,9 +44,10 @@ let
           "none"
           "reload"
           "restart"
+          "restart-or-start"
         ];
         default = "none";
-        description = "Action to request for the consumer when the rendered file changes.";
+        description = "Action to request for the consumer when the rendered file changes; restart-or-start also starts an inactive unit.";
       };
     };
   };
@@ -70,6 +71,12 @@ let
           type = types.nullOr types.lines;
           default = null;
           description = "Optional OpenBao Agent template body evaluated against this KV record.";
+        };
+
+        requiredForStartup = lib.mkOption {
+          type = types.bool;
+          default = true;
+          description = "Whether the Agent waits for this secret to render before becoming active.";
         };
 
         owner = lib.mkOption {
@@ -114,6 +121,8 @@ let
         consumer:
         if consumer.onChange == "restart" then
           "${pkgs.systemd}/bin/systemctl --no-block try-restart ${lib.escapeShellArg consumer.unit}"
+        else if consumer.onChange == "restart-or-start" then
+          "${pkgs.systemd}/bin/systemctl --no-block restart ${lib.escapeShellArg consumer.unit}"
         else if consumer.onChange == "reload" then
           "${pkgs.systemd}/bin/systemctl --no-block try-reload-or-restart ${lib.escapeShellArg consumer.unit}"
         else
@@ -204,11 +213,15 @@ let
     }) secret.consumers
   ) (builtins.attrValues cfg.secrets);
 
-  requiredMarkers = mapAttrsToList (name: _: readinessMarkerPath name) cfg.secrets;
+  requiredMarkers = lib.concatLists (
+    mapAttrsToList (
+      name: secret: lib.optional secret.requiredForStartup (readinessMarkerPath name)
+    ) cfg.secrets
+  );
   mapAttrsToList = lib.mapAttrsToList;
   renderedFilesCondition =
     if requiredMarkers == [ ] then
-      "false"
+      "true"
     else
       lib.concatStringsSep " && " (map (marker: "[ -e ${lib.escapeShellArg marker} ]") requiredMarkers);
 

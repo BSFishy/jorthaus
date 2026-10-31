@@ -67,6 +67,12 @@ in
   "secrets/openbao-backup-approle-secret-id.age".publicKeys = openbao-hosts;
   "secrets/openbao-metal-role-id.age".publicKeys = all-nodes;
   "secrets/openbao-metal-secret-id.age".publicKeys = all-nodes;
+  "secrets/nats-pki-gaia-01-role-id.age".publicKeys = [ matt gaia-01 ];
+  "secrets/nats-pki-gaia-01-secret-id.age".publicKeys = [ matt gaia-01 ];
+  "secrets/nats-pki-gaia-02-role-id.age".publicKeys = [ matt gaia-02 ];
+  "secrets/nats-pki-gaia-02-secret-id.age".publicKeys = [ matt gaia-02 ];
+  "secrets/nats-pki-gaia-03-role-id.age".publicKeys = [ matt gaia-03 ];
+  "secrets/nats-pki-gaia-03-secret-id.age".publicKeys = [ matt gaia-03 ];
   "secrets/victorialogs-backup-approle-role-id.age".publicKeys = victorialogs-backup-hosts;
   "secrets/victorialogs-backup-approle-secret-id.age".publicKeys = victorialogs-backup-hosts;
 

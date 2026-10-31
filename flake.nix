@@ -78,6 +78,7 @@
               inherit pkgs system hostNames;
             };
             ssdp-relay-image = import ./nix/packages/ssdp-relay.nix { inherit pkgs; };
+            openbao-plugin-secrets-nats = pkgs.callPackage ./nix/packages/openbao-plugin-secrets-nats.nix { };
           }
           // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
             forgejo-runner-vm-test = import ./nix/tests/forgejo-runner.nix { inherit pkgs; };

@@ -28,6 +28,11 @@ in
     slivers.postgres.enable = mkEnableOption "the Patroni/Postgres sliver";
     slivers.pgbouncer.enable = mkEnableOption "the PgBouncer sliver";
     slivers.valkey.enable = mkEnableOption "the Valkey sliver";
+    slivers.nats = {
+      enable = mkEnableOption "the NATS sliver";
+      start = mkEnableOption "starting the NATS server";
+      pki.enable = mkEnableOption "NATS route certificate issuance through OpenBao PKI";
+    };
     slivers.victorialogs.enable = mkEnableOption "the VictoriaLogs sliver";
     slivers.fluentBit.enable = mkEnableOption "the Fluent Bit sliver";
     slivers.forgejoRunner.enable = mkEnableOption "Forgejo Actions runners";

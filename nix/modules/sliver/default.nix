@@ -8,6 +8,7 @@ _:
     ./postgres
     ./pgbouncer.nix
     ./valkey.nix
+    ./nats.nix
     ./k3s.nix
     ./seaweedfs
     ./victorialogs.nix

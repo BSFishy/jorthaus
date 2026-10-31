@@ -184,6 +184,21 @@ create-openbao-metal-approle-secrets:
   bao write -f -field=secret_id auth/approle/role/metal-agent/secret-id \
     | agenix -e "$secret_id_file"
 
+# Create and encrypt one host's NATS PKI signer AppRole credentials.
+[script]
+[group('secret')]
+create-nats-pki-approle-secrets host:
+  set -euo pipefail
+  host='{{host}}'
+  case "$host" in gaia-01|gaia-02|gaia-03) ;; *) echo 'Host must be gaia-01, gaia-02, or gaia-03.' >&2; exit 1 ;; esac
+  role_id_file="secrets/nats-pki-$host-role-id.age"
+  secret_id_file="secrets/nats-pki-$host-secret-id.age"
+  test ! -e "$role_id_file" && test ! -e "$secret_id_file"
+  bao read -field=role_id "auth/approle/role/nats-route-$host/role-id" \
+    | agenix -e "$role_id_file"
+  bao write -f -field=secret_id "auth/approle/role/nats-route-$host/secret-id" \
+    | agenix -e "$secret_id_file"
+
 # Check whether the OpenBao metal mount and AppRole are readable without printing identifiers.
 [group('openbao')]
 openbao-metal-status:

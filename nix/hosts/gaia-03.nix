@@ -9,6 +9,11 @@
     postgres.enable = true;
     pgbouncer.enable = true;
     valkey.enable = true;
+    nats = {
+      enable = true;
+      start = true;
+      pki.enable = true;
+    };
     victorialogs.enable = true;
     fluentBit.enable = true;
     forgejoRunner.enable = true;
@@ -55,6 +60,10 @@
           };
           victorialogs = {
             quota = "100g";
+            enforce = true;
+          };
+          nats = {
+            quota = "20g";
             enforce = true;
           };
         };

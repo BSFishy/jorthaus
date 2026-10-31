@@ -3,12 +3,14 @@
   host,
   hostInventory,
   lib,
+  pkgs,
   ...
 }:
 
 let
   enabled = host.slivers.openbao.enable;
   serviceAddress = "10.1.11.10";
+  natsSecretsPlugin = pkgs.callPackage ../../packages/openbao-plugin-secrets-nats.nix { };
   certName = "openbao-${host.hostname}";
   nodeDnsName = "${host.hostname}.node.jort.haus";
   internalApiDnsName = "openbao.service.jort.haus";
@@ -81,6 +83,9 @@ in
       ];
 
       systemd.services.openbao = {
+        serviceConfig.BindReadOnlyPaths = [
+          "${lib.getExe natsSecretsPlugin}:/run/openbao/plugins/${natsSecretsPlugin.meta.mainProgram}"
+        ];
         after = [ "var-lib-acme.mount" ];
         wants = [ "var-lib-acme.mount" ];
         unitConfig = {
@@ -102,6 +107,7 @@ in
         enable = true;
         settings = {
           cluster_name = "jorthaus-openbao";
+          plugin_directory = "/run/openbao/plugins";
           # TODO: Revisit whether every OpenBao node should expose the UI once a
           # more deliberate admin access pattern exists.
           ui = true;

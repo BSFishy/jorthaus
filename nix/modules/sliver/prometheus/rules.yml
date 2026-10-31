@@ -94,7 +94,7 @@ groups:
   - name: monitoring-health
     rules:
       - alert: MonitoringTargetDown
-        expr: up{job=~"prometheus|alertmanager|victorialogs|thanos-sidecar|thanos-query|thanos-storegateway|thanos-compactor|kube-state-metrics|kubelet|kubelet-cadvisor|kubernetes-control-plane|coredns|kured|secrets-store-csi|traefik|cert-manager|authentik-server|authentik-worker|seaweedfs-csi|cilium-agent|cilium-operator|cilium-envoy|postgres"} == 0
+        expr: up{job=~"prometheus|alertmanager|victorialogs|nats|thanos-sidecar|thanos-query|thanos-storegateway|thanos-compactor|kube-state-metrics|kubelet|kubelet-cadvisor|kubernetes-control-plane|coredns|kured|secrets-store-csi|traefik|cert-manager|authentik-server|authentik-worker|seaweedfs-csi|cilium-agent|cilium-operator|cilium-envoy|postgres"} == 0
         for: 10m
         labels:
           severity: warning

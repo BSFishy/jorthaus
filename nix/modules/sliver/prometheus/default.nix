@@ -22,6 +22,9 @@ let
   victorialogsHosts = lib.filter (peer: peer.slivers.victorialogs.enable) (
     builtins.attrValues hostInventory
   );
+  natsHosts = lib.sort (a: b: a.hostname < b.hostname) (
+    lib.filter (peer: peer.slivers.nats.enable) (builtins.attrValues hostInventory)
+  );
   kubeletHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.k3s.enable) (builtins.attrValues hostInventory)
   );
@@ -72,6 +75,7 @@ let
   alertmanagerTarget = peer: "${peer.ipam.ipv4.address}:9093";
   prometheusTarget = peer: "${peer.ipam.ipv4.address}:9090";
   victorialogsTarget = peer: "${peer.ipam.ipv4.address}:9428";
+  natsTarget = peer: "${peer.ipam.ipv4.address}:7777";
   kubeStateMetricsTarget = "10.43.200.50:8080";
   kubeletTarget = peer: "${peer.ipam.ipv4.address}:10250";
   appMetricsTokenFile = config.age.secrets."prometheus-app-metrics-token".path;
@@ -866,6 +870,14 @@ in
               targets = [ (victorialogsTarget peer) ];
               labels.host = peer.hostname;
             }) victorialogsHosts;
+          }
+          {
+            job_name = "nats";
+            sample_limit = 5000;
+            static_configs = map (peer: {
+              targets = [ (natsTarget peer) ];
+              labels.host = peer.hostname;
+            }) natsHosts;
           }
         ];
         alertmanagers = [
