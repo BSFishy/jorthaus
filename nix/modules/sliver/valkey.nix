@@ -82,7 +82,7 @@ let
       ${pkgs.coreutils}/bin/chmod 0600 "$redis_config"
     fi
     temporary_config=$(${pkgs.coreutils}/bin/mktemp "''${redis_config}.XXXXXX")
-    ${pkgs.gnused}/bin/sed -E '/^[[:space:]]*(requirepass|user|replicaof|slaveof)[[:space:]]+/d' "$redis_config" > "$temporary_config"
+    ${pkgs.gnused}/bin/sed -E '/^[[:space:]]*(requirepass|user|replicaof|slaveof|tls-ca-cert-file)[[:space:]]+/d' "$redis_config" > "$temporary_config"
     ${pkgs.coreutils}/bin/chown redis-valkey:redis-valkey "$temporary_config"
     ${pkgs.coreutils}/bin/chmod 0600 "$temporary_config"
     ${pkgs.coreutils}/bin/mv "$temporary_config" "$redis_config"
@@ -330,7 +330,7 @@ in
 
           tmp_conf=$(mktemp)
           printf 'include "%s"\n' "$sentinel_run_conf" > "$tmp_conf"
-          ${pkgs.gnugrep}/bin/grep -vE '^(include "/run/redis-valkey-sentinel/nixos\.conf"|port |tls-port )' "$sentinel_conf" >> "$tmp_conf" || true
+          ${pkgs.gnugrep}/bin/grep -vE '^(include "/run/redis-valkey-sentinel/nixos\.conf"|port |tls-port |tls-ca-cert-file[[:space:]]+)' "$sentinel_conf" >> "$tmp_conf" || true
           cat "$tmp_conf" > "$sentinel_conf"
           rm -f "$tmp_conf"
 
