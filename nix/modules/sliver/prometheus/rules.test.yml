@@ -166,3 +166,88 @@ tests:
       - eval_time: 12m
         alertname: NodeMemoryAvailableLow
         exp_alerts: []
+  - interval: 30s
+    input_series:
+      - series: 'kine_insert_errors_total{job="kubernetes-control-plane",host="gaia-01",instance="gaia-01.node.jort.haus:6443",retriable="false"}'
+        values: '0+0x3 1+1x20'
+      - series: 'up{job="victorialogs",host="gaia-02",instance="10.1.10.2:9428"}'
+        values: '0+0x20'
+      - series: 'up{job="fluent-bit",host="gaia-04",instance="10.1.10.4:2020"}'
+        values: '0+0x20'
+      - series: 'fluentbit_output_retries_total{job="fluent-bit",host="gaia-03",instance="10.1.10.3:2020",name="victorialogs-gaia-01"}'
+        values: '0+0x3 1+1x20'
+      - series: 'fluentbit_output_retries_failed_total{job="fluent-bit",host="gaia-03",instance="10.1.10.3:2020",name="victorialogs-gaia-01"}'
+        values: '0+0x3 1+1x20'
+      - series: 'fluentbit_input_storage_overlimit{job="fluent-bit",host="gaia-03",instance="10.1.10.3:2020",name="systemd.0"}'
+        values: '0+0x3 1+0x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: K3sDatastoreWriteErrors
+        exp_alerts:
+          - exp_labels:
+              job: kubernetes-control-plane
+              host: gaia-01
+              instance: gaia-01.node.jort.haus:6443
+              retriable: "false"
+              severity: critical
+            exp_annotations:
+              summary: "K3s datastore writes are failing on gaia-01"
+              description: "Kine recorded failed PostgreSQL-backed datastore writes during the last 5 minutes."
+      - eval_time: 4m
+        alertname: VictoriaLogsReplicaUnavailable
+        exp_alerts:
+          - exp_labels:
+              job: victorialogs
+              host: gaia-02
+              instance: 10.1.10.2:9428
+              severity: critical
+            exp_annotations:
+              summary: "VictoriaLogs replica on gaia-02 is unavailable"
+              description: "Prometheus cannot scrape the VictoriaLogs replica at 10.1.10.2:9428."
+      - eval_time: 4m
+        alertname: FluentBitMetricsTargetDown
+        exp_alerts:
+          - exp_labels:
+              job: fluent-bit
+              host: gaia-04
+              instance: 10.1.10.4:2020
+              severity: critical
+            exp_annotations:
+              summary: "Fluent Bit metrics target on gaia-04 is unavailable"
+              description: "Prometheus cannot scrape Fluent Bit at 10.1.10.4:2020; log collection and output delivery may be impaired."
+      - eval_time: 6m
+        alertname: FluentBitOutputRetries
+        exp_alerts:
+          - exp_labels:
+              job: fluent-bit
+              host: gaia-03
+              instance: 10.1.10.3:2020
+              name: victorialogs-gaia-01
+              severity: warning
+            exp_annotations:
+              summary: "Fluent Bit is retrying log delivery on gaia-03"
+              description: "One or more Fluent Bit outputs retried batches during the last 5 minutes; inspect the output label victorialogs-gaia-01."
+      - eval_time: 6m
+        alertname: FluentBitOutputBatchesDropped
+        exp_alerts:
+          - exp_labels:
+              job: fluent-bit
+              host: gaia-03
+              instance: 10.1.10.3:2020
+              name: victorialogs-gaia-01
+              severity: critical
+            exp_annotations:
+              summary: "Fluent Bit dropped log data on gaia-03"
+              description: "An output abandoned a batch or dropped records during the last 5 minutes; inspect output victorialogs-gaia-01."
+      - eval_time: 4m
+        alertname: FluentBitInputStorageOverlimit
+        exp_alerts:
+          - exp_labels:
+              job: fluent-bit
+              host: gaia-03
+              instance: 10.1.10.3:2020
+              name: systemd.0
+              severity: warning
+            exp_annotations:
+              summary: "Fluent Bit input storage is over limit on gaia-03"
+              description: "An input has reached its configured storage limit, risking paused log collection."

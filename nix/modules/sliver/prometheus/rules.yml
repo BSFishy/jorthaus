@@ -101,6 +101,58 @@ groups:
         annotations:
           summary: "{{ $labels.job }} target {{ $labels.instance }} is unreachable"
           description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 10 minutes."
+  - name: control-plane-and-log-delivery
+    rules:
+      - alert: K3sDatastoreWriteErrors
+        expr: increase(kine_insert_errors_total{job="kubernetes-control-plane"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "K3s datastore writes are failing on {{ $labels.host }}"
+          description: "Kine recorded failed PostgreSQL-backed datastore writes during the last 5 minutes."
+      - alert: VictoriaLogsReplicaUnavailable
+        expr: up{job="victorialogs"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VictoriaLogs replica on {{ $labels.host }} is unavailable"
+          description: "Prometheus cannot scrape the VictoriaLogs replica at {{ $labels.instance }}."
+      - alert: FluentBitMetricsTargetDown
+        expr: up{job="fluent-bit"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fluent Bit metrics target on {{ $labels.host }} is unavailable"
+          description: "Prometheus cannot scrape Fluent Bit at {{ $labels.instance }}; log collection and output delivery may be impaired."
+      - alert: FluentBitOutputRetries
+        expr: increase(fluentbit_output_retries_total{job="fluent-bit"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fluent Bit is retrying log delivery on {{ $labels.host }}"
+          description: "One or more Fluent Bit outputs retried batches during the last 5 minutes; inspect the output label {{ $labels.name }}."
+      - alert: FluentBitOutputBatchesDropped
+        expr: |
+          increase(fluentbit_output_retries_failed_total{job="fluent-bit"}[5m]) > 0
+          or increase(fluentbit_output_dropped_records_total{job="fluent-bit"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fluent Bit dropped log data on {{ $labels.host }}"
+          description: "An output abandoned a batch or dropped records during the last 5 minutes; inspect output {{ $labels.name }}."
+      - alert: FluentBitInputStorageOverlimit
+        expr: fluentbit_input_storage_overlimit{job="fluent-bit"} == 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fluent Bit input storage is over limit on {{ $labels.host }}"
+          description: "An input has reached its configured storage limit, risking paused log collection."
   - name: postgres-capacity
     rules:
       - alert: PostgresExporterDatabaseDown

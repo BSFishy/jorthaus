@@ -10,6 +10,9 @@ let
   fluentBitHosts = lib.filter (peer: peer.slivers.fluentBit.enable) (
     builtins.attrValues hostInventory
   );
+  prometheusHosts = lib.filter (peer: peer.slivers.prometheus.enable) (
+    builtins.attrValues hostInventory
+  );
   systemdServices = lib.optional (fluentBitHosts != [ ]) {
     unit = "fluent-bit.service";
     sliver = "fluentBit";
@@ -155,6 +158,9 @@ in
             flush = 1;
             grace = 30;
             log_level = "warn";
+            http_server = true;
+            http_listen = host.ipam.ipv4.address;
+            http_port = 2020;
             parsers_file = "${pkgs.fluent-bit}/etc/fluent-bit/parsers.conf";
             "storage.path" = "${dataPath}/storage";
             "storage.sync" = "full";
@@ -292,6 +298,11 @@ in
           };
         };
       };
+
+      networking.firewall.extraCommands = lib.concatMapStringsSep "\n" (
+        peer:
+        "iptables -A nixos-fw -p tcp -s ${peer.ipam.ipv4.address}/32 -m tcp --dport 2020 -j nixos-fw-accept"
+      ) prometheusHosts;
 
       systemd.services.fluent-bit = {
         after = [ "network-online.target" ];

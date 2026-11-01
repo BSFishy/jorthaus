@@ -22,6 +22,9 @@ let
   victorialogsHosts = lib.filter (peer: peer.slivers.victorialogs.enable) (
     builtins.attrValues hostInventory
   );
+  fluentBitHosts = lib.filter (peer: peer.slivers.fluentBit.enable) (
+    builtins.attrValues hostInventory
+  );
   natsHosts = lib.sort (a: b: a.hostname < b.hostname) (
     lib.filter (peer: peer.slivers.nats.enable) (builtins.attrValues hostInventory)
   );
@@ -75,6 +78,7 @@ let
   alertmanagerTarget = peer: "${peer.ipam.ipv4.address}:9093";
   prometheusTarget = peer: "${peer.ipam.ipv4.address}:9090";
   victorialogsTarget = peer: "${peer.ipam.ipv4.address}:9428";
+  fluentBitTarget = peer: "${peer.ipam.ipv4.address}:2020";
   natsTarget = peer: "${peer.ipam.ipv4.address}:7777";
   kubeStateMetricsTarget = "10.43.200.50:8080";
   kubeletTarget = peer: "${peer.ipam.ipv4.address}:10250";
@@ -546,6 +550,15 @@ in
               labels.host = peer.hostname;
             }) postgresHosts;
             sample_limit = 5000;
+          }
+          {
+            job_name = "fluent-bit";
+            metrics_path = "/api/v1/metrics/prometheus";
+            static_configs = map (peer: {
+              targets = [ (fluentBitTarget peer) ];
+              labels.host = peer.hostname;
+            }) fluentBitHosts;
+            sample_limit = 1000;
           }
           {
             job_name = "prometheus";
