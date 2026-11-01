@@ -340,6 +340,11 @@ in
           };
 
           oneuptime.login = false;
+          oneuptime_app = {
+            login = true;
+            memberships = [ "oneuptime" ];
+            defaultRole = "oneuptime";
+          };
 
           prometheus_exporter = {
             login = true;

@@ -124,6 +124,28 @@ plan-system:
 apply-system:
   TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN" tofu apply
 
+# plan the OneUptime database credential resources
+[group('terraform')]
+[working-directory: 'terraform/system']
+plan-oneuptime-credentials:
+  TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN" tofu plan \
+    -target=vault_database_secret_backend_connection.oneuptime \
+    -target=vault_database_secret_backend_connection.valkey \
+    -target=vault_database_secret_backend_static_role.oneuptime_postgres \
+    -target=vault_database_secret_backend_static_role.oneuptime_valkey \
+    -target=vault_policy.oneuptime_credential_sync
+
+# apply the OneUptime database credential resources
+[group('terraform')]
+[working-directory: 'terraform/system']
+apply-oneuptime-credentials:
+  TF_VAR_cloudflare_api_token="$CLOUDFLARE_API_TOKEN" tofu apply \
+    -target=vault_database_secret_backend_connection.oneuptime \
+    -target=vault_database_secret_backend_connection.valkey \
+    -target=vault_database_secret_backend_static_role.oneuptime_postgres \
+    -target=vault_database_secret_backend_static_role.oneuptime_valkey \
+    -target=vault_policy.oneuptime_credential_sync
+
 # import the VictoriaLogs AppRole after an interrupted system Terraform apply
 [group('terraform')]
 [working-directory: 'terraform/system']

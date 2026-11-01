@@ -2,7 +2,7 @@ resource "vault_database_secret_backend_connection" "oneuptime" {
   backend           = vault_mount.postgres.path
   name              = "oneuptime"
   plugin_name       = "postgresql-database-plugin"
-  allowed_roles     = ["oneuptime"]
+  allowed_roles     = ["oneuptime-static"]
   verify_connection = true
 
   postgresql {
@@ -13,6 +13,14 @@ resource "vault_database_secret_backend_connection" "oneuptime" {
     max_open_connections    = 5
     max_connection_lifetime = 300
   }
+}
+
+resource "vault_database_secret_backend_static_role" "oneuptime_valkey" {
+  backend         = vault_mount.valkey.path
+  name            = "oneuptime-static"
+  db_name         = vault_database_secret_backend_connection.valkey.name
+  username        = "oneuptime"
+  rotation_period = 15552000
 }
 
 resource "vault_database_secret_backend_role" "oneuptime_valkey" {
@@ -41,6 +49,18 @@ resource "vault_database_secret_backend_role" "oneuptime_valkey" {
 
   default_ttl = 1209600
   max_ttl     = 1209600
+}
+
+resource "vault_database_secret_backend_static_role" "oneuptime_postgres" {
+  backend         = vault_mount.postgres.path
+  name            = "oneuptime-static"
+  db_name         = vault_database_secret_backend_connection.oneuptime.name
+  username        = "oneuptime_app"
+  rotation_period = 15552000
+
+  rotation_statements = [
+    "ALTER ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}';"
+  ]
 }
 
 resource "vault_database_secret_backend_role" "oneuptime_postgres" {
@@ -134,11 +154,11 @@ resource "vault_policy" "oneuptime_credential_sync" {
   name = "oneuptime-credential-sync"
 
   policy = <<-EOT
-    path "postgres/creds/oneuptime" {
+    path "postgres/static-creds/oneuptime-static" {
       capabilities = ["read"]
     }
 
-    path "valkey/creds/oneuptime" {
+    path "valkey/static-creds/oneuptime-static" {
       capabilities = ["read"]
     }
   EOT

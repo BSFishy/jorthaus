@@ -8,7 +8,7 @@ resource "vault_database_secret_backend_connection" "valkey" {
   backend           = vault_mount.valkey.path
   name              = "valkey"
   plugin_name       = "redis-database-plugin"
-  allowed_roles     = ["*"]
+  allowed_roles     = ["oneuptime-static"]
   verify_connection = true
 
   redis {

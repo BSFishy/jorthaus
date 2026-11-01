@@ -110,6 +110,11 @@ create-seaweedfs-postgres-secret:
 postgres-ensure:
   ssh matt@gaia-01.node.jort.haus sudo systemctl start jorthaus-postgres-ensure.service
 
+[script]
+[group('valkey')]
+oneuptime-valkey-user-bootstrap host confirmation='':
+  scripts/bootstrap-oneuptime-valkey-user '{{host}}' '{{confirmation}}'
+
 # Stage, roll back, or retire a SeaweedFS S3 grant key without printing it.
 [script]
 [group('seaweedfs')]

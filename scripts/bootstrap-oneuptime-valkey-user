@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+host=${1:?Usage: bootstrap-oneuptime-valkey-user HOST CONFIRMATION}
+confirmation=${2:?Usage: bootstrap-oneuptime-valkey-user HOST CONFIRMATION}
+case "$host" in
+  gaia-01|gaia-02|gaia-03) ;;
+  *) echo 'Host must be gaia-01, gaia-02, or gaia-03.' >&2; exit 1 ;;
+esac
+if [[ $confirmation != bootstrap-oneuptime-valkey-user ]]; then
+  echo 'Pass the exact confirmation bootstrap-oneuptime-valkey-user.' >&2
+  exit 1
+fi
+
+ssh "matt@$host.node.jort.haus" sudo bash -s <<'REMOTE'
+set -Eeuo pipefail
+
+cli=/run/current-system/sw/bin/valkey-cli
+password_file=/run/agenix/valkey-password
+ca_file=/etc/ssl/certs/ca-bundle.crt
+[[ -x $cli && -r $password_file && -r $ca_file ]]
+export REDISCLI_AUTH="$(tr -d '\r\n' < "$password_file")"
+
+run_cli() {
+  local node=$1
+  shift
+  "$cli" --tls --cacert "$ca_file" --sni "$node.node.jort.haus" \
+    --no-auth-warning --raw -h "$node.node.jort.haus" -p 6379 "$@"
+}
+
+nodes=(gaia-01 gaia-02 gaia-03)
+master=
+for node in "${nodes[@]}"; do
+  role=$(run_cli "$node" ROLE | head -n1)
+  if [[ $role == master ]]; then
+    [[ -z $master ]] || { echo 'More than one Valkey primary was found.' >&2; exit 1; }
+    master=$node
+  elif [[ $role != slave && $role != replica ]]; then
+    echo "Unexpected Valkey role response from $node." >&2
+    exit 1
+  fi
+  if run_cli "$node" ACL LIST | grep -q '^user oneuptime '; then
+    echo "The oneuptime ACL user already exists on $node; refusing bootstrap." >&2
+    exit 1
+  fi
+done
+[[ -n $master ]] || { echo 'No Valkey primary was found.' >&2; exit 1; }
+
+password_hash=$(head -c 32 /dev/urandom | sha256sum | cut -d' ' -f1)
+[[ $password_hash =~ ^[0-9a-f]{64}$ ]]
+run_cli "$master" ACL SETUSER oneuptime reset on "#$password_hash" \
+  resetdbs db=1 '~*' '&*' '+@read' '+@write' '+@connection' '+@pubsub' \
+  '+@scripting' '+@transaction' '+@blocking' '-@admin' '-@dangerous' '+info' >/dev/null
+unset password_hash
+run_cli "$master" ACL SAVE >/dev/null
+
+for _ in $(seq 1 60); do
+  all_present=true
+  for node in "${nodes[@]}"; do
+    if ! run_cli "$node" ACL LIST | grep -q '^user oneuptime '; then
+      all_present=false
+      break
+    fi
+  done
+  [[ $all_present == true ]] && break
+  sleep 1
+done
+[[ $all_present == true ]] || {
+  echo 'The ACL user was created on the primary but did not propagate to every node.' >&2
+  exit 1
+}
+printf 'Created the OneUptime Valkey ACL user on %s and verified it on all three nodes.\n' "$master"
+REMOTE

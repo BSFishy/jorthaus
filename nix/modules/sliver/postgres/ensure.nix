@@ -39,6 +39,9 @@ let
       ${lib.concatMapStrings (role: ''
         psql_postgres -tAc ${lib.escapeShellArg "GRANT ${quoteIdent role} TO ${ident};"}
       '') user.memberships}
+      ${lib.optionalString (user.defaultRole != null) ''
+        psql_postgres -tAc ${lib.escapeShellArg "ALTER ROLE ${ident} SET role TO ${quoteLiteral user.defaultRole};"}
+      ''}
       ${lib.optionalString (user.passwordFile != null) ''
         # psql hashes the password client-side before sending ALTER ROLE.
         (
@@ -147,6 +150,12 @@ in
               type = lib.types.nullOr lib.types.str;
               default = null;
               description = "Optional file containing a static role password, applied with psql's password-safe prompt.";
+            };
+
+            defaultRole = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Optional role selected for new sessions after membership grants are applied.";
             };
 
             replication = lib.mkOption {
