@@ -251,3 +251,37 @@ tests:
             exp_annotations:
               summary: "Fluent Bit input storage is over limit on gaia-03"
               description: "An input has reached its configured storage limit, risking paused log collection."
+  - interval: 30s
+    input_series:
+      - series: 'patroni_primary{job="patroni",host="gaia-01",instance="gaia-01.node.jort.haus:8008",scope="jorthaus-postgres",name="gaia-01"}'
+        values: '1+0x20'
+      - series: 'patroni_primary{job="patroni",host="gaia-02",instance="gaia-02.node.jort.haus:8008",scope="jorthaus-postgres",name="gaia-02"}'
+        values: '0+0x20'
+      - series: 'patroni_primary{job="patroni",host="gaia-03",instance="gaia-03.node.jort.haus:8008",scope="jorthaus-postgres",name="gaia-03"}'
+        values: '0+0x3 1+0x20'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: PatroniLeaderCount
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: PatroniLeaderCount
+        exp_alerts:
+          - exp_labels:
+              scope: jorthaus-postgres
+              severity: critical
+            exp_annotations:
+              summary: "Patroni cluster jorthaus-postgres does not have exactly one leader"
+              description: "Prometheus sees 2 Patroni leaders; investigate cluster state before rebooting a PostgreSQL node."
+      - eval_time: 4m
+        alertname: PatroniLeaderChanged
+        exp_alerts:
+          - exp_labels:
+              job: patroni
+              host: gaia-03
+              instance: gaia-03.node.jort.haus:8008
+              scope: jorthaus-postgres
+              name: gaia-03
+              severity: warning
+            exp_annotations:
+              summary: "Patroni role changed on gaia-03"
+              description: "The Patroni leader/replica role changed within the last 10 minutes; correlate with planned maintenance and cluster health."

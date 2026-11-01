@@ -78,6 +78,7 @@ let
   alertmanagerTarget = peer: "${peer.ipam.ipv4.address}:9093";
   prometheusTarget = peer: "${peer.ipam.ipv4.address}:9090";
   victorialogsTarget = peer: "${peer.ipam.ipv4.address}:9428";
+  patroniTarget = peer: "${peer.hostname}.node.jort.haus:8008";
   fluentBitTarget = peer: "${peer.ipam.ipv4.address}:2020";
   natsTarget = peer: "${peer.ipam.ipv4.address}:7777";
   kubeStateMetricsTarget = "10.43.200.50:8080";
@@ -550,6 +551,16 @@ in
               labels.host = peer.hostname;
             }) postgresHosts;
             sample_limit = 5000;
+          }
+          {
+            job_name = "patroni";
+            scheme = "https";
+            tls_config.ca_file = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            static_configs = map (peer: {
+              targets = [ (patroniTarget peer) ];
+              labels.host = peer.hostname;
+            }) postgresHosts;
+            sample_limit = 2000;
           }
           {
             job_name = "fluent-bit";

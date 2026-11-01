@@ -94,13 +94,31 @@ groups:
   - name: monitoring-health
     rules:
       - alert: MonitoringTargetDown
-        expr: up{job=~"prometheus|alertmanager|victorialogs|nats|thanos-sidecar|thanos-query|thanos-storegateway|thanos-compactor|kube-state-metrics|kubelet|kubelet-cadvisor|kubernetes-control-plane|coredns|kured|secrets-store-csi|traefik|cert-manager|authentik-server|authentik-worker|seaweedfs-csi|cilium-agent|cilium-operator|cilium-envoy|postgres"} == 0
+        expr: up{job=~"prometheus|alertmanager|victorialogs|patroni|nats|thanos-sidecar|thanos-query|thanos-storegateway|thanos-compactor|kube-state-metrics|kubelet|kubelet-cadvisor|kubernetes-control-plane|coredns|kured|secrets-store-csi|traefik|cert-manager|authentik-server|authentik-worker|seaweedfs-csi|cilium-agent|cilium-operator|cilium-envoy|postgres"} == 0
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} target {{ $labels.instance }} is unreachable"
           description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 10 minutes."
+  - name: patroni-health
+    rules:
+      - alert: PatroniLeaderCount
+        expr: sum by (scope) (patroni_primary{job="patroni"}) != 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Patroni cluster {{ $labels.scope }} does not have exactly one leader"
+          description: "Prometheus sees {{ $value }} Patroni leaders; investigate cluster state before rebooting a PostgreSQL node."
+      - alert: PatroniLeaderChanged
+        expr: changes(patroni_primary{job="patroni"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Patroni role changed on {{ $labels.host }}"
+          description: "The Patroni leader/replica role changed within the last 10 minutes; correlate with planned maintenance and cluster health."
   - name: control-plane-and-log-delivery
     rules:
       - alert: K3sDatastoreWriteErrors
