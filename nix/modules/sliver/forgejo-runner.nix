@@ -136,7 +136,7 @@ in
         requires = [ buildkitUnit ];
         after = [ buildkitUnit ];
         preStart = ''
-          cp ${config.services.forgejo-runner.instances.forgejo.configFile} ./config.yaml
+          cp --remove-destination ${config.services.forgejo-runner.instances.forgejo.configFile} ./config.yaml
           chmod u+w ./config.yaml
           ${lib.getExe pkgs.replace-secret} "@FORGEJO_RUNNER_UUID@" "$CREDENTIALS_DIRECTORY/UUID" ./config.yaml
           chmod u-w ./config.yaml
