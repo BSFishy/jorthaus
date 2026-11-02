@@ -15,7 +15,10 @@ buildGo127Module rec {
   };
 
   vendorHash = "sha256-39SOrXzG3h9OothQyss5kZfbEhnMiFDxoIa9kCug5Es=";
-  patches = [ ./patches/openbao-plugin-secrets-nats-resolver-errors.patch ];
+  patches = [
+    ./patches/openbao-plugin-secrets-nats-resolver-errors.patch
+    ./patches/openbao-plugin-secrets-nats-user-issue-diagnostics.patch
+  ];
 
   subPackages = [ "cmd/openbao-plugin-secrets-nats" ];
   env.CGO_ENABLED = 0;

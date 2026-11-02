@@ -11,6 +11,12 @@ locals {
     gaia-02 = "gaia-02.node.jort.haus"
     gaia-03 = "gaia-03.node.jort.haus"
   }
+
+  nats_agency_identity = {
+    operator = "jorthaus"
+    account  = "agency"
+    user     = "agency"
+  }
 }
 
 resource "vault_mount" "nats_pki" {
@@ -35,8 +41,8 @@ resource "vault_pki_secret_backend_role" "nats_route" {
 
   backend                     = vault_mount.nats_pki.path
   name                        = "route-${each.key}"
-  ttl                         = "720h"
-  max_ttl                     = "2160h"
+  ttl                         = "2592000"
+  max_ttl                     = "7776000"
   allowed_domains             = [each.value]
   allow_bare_domains          = true
   allow_subdomains            = false
@@ -82,4 +88,28 @@ resource "vault_approle_auth_backend_role" "nats_route_signer" {
   token_period  = 86400
   token_ttl     = 3600
   token_max_ttl = 14400
+}
+
+resource "vault_policy" "agency_nats_credentials" {
+  name = "agency-nats-credentials"
+
+  policy = <<-EOT
+    path "${vault_mount.nats_secrets.path}/creds/operator/${local.nats_agency_identity.operator}/account/${local.nats_agency_identity.account}/user/${local.nats_agency_identity.user}" {
+      capabilities = ["read"]
+    }
+  EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "agency_nats_credentials" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "agency-nats-credentials"
+  bound_service_account_names      = ["agency"]
+  bound_service_account_namespaces = ["agency"]
+  audience                         = "vault"
+  token_policies                   = [vault_policy.agency_nats_credentials.name]
+
+  token_no_default_policy = true
+  token_type              = "service"
+  token_ttl               = 3600
+  token_max_ttl           = 3600
 }
