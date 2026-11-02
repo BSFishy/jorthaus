@@ -10,6 +10,7 @@ _:
     ./valkey.nix
     ./nats.nix
     ./k3s.nix
+    ./graceful-reboot.nix
     ./seaweedfs
     ./victorialogs.nix
     ./victorialogs-backup.nix

@@ -17,12 +17,15 @@ The kured Helm values live at:
 kubernetes/kured/values/kured.yaml
 ```
 
-The NixOS reboot command must use the host's Nix profile path:
+The reboot command calls the host-side coordinator. Kured cordons and drains the
+node before invoking it; the coordinator runs declared hooks in order, aborts on
+a failed or timed-out hook, and requests reboot only after every hook succeeds.
+The coordinator service failure is monitored through the node exporter.
 
 ```yaml
 configuration:
   rebootSentinel: /var/run/reboot-required
-  rebootCommand: /run/current-system/sw/bin/systemctl reboot
+  rebootCommand: /run/current-system/sw/bin/jorthaus-kured-reboot
 ```
 
 The default `/bin/systemctl reboot` path does not exist on NixOS hosts when
@@ -47,7 +50,7 @@ Expected values include:
 
 ```text
 --reboot-sentinel=/sentinel/reboot-required
---reboot-command=/run/current-system/sw/bin/systemctl reboot
+--reboot-command=/run/current-system/sw/bin/jorthaus-kured-reboot
 ```
 
 ## Check logs
@@ -108,4 +111,8 @@ done
 ```
 
 Follow up on any failed units before relying on the weekly reboot cycle for
-credential refresh or maintenance workflows.
+credential refresh or maintenance workflows. If a graceful-reboot hook fails,
+Kured leaves the node drained and the coordinator unit failed. Inspect its logs,
+fix the underlying issue, then clear the failure with
+`sudo systemctl reset-failed jorthaus-graceful-reboot.service` before allowing
+Kured to retry.

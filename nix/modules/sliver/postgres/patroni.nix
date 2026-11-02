@@ -10,6 +10,7 @@ let
   enabled = host.slivers.postgres.enable;
   patroniScope = "jorthaus-postgres";
   patroniNamespace = "/service";
+  patroniConfigFile = "/etc/patroni-${patroniScope}-${host.hostname}.yaml";
   restApiPort = 8008;
   postgresPort = 5432;
   maxConnections = 200;
@@ -21,6 +22,77 @@ let
   nodeDnsName = "${host.hostname}.node.jort.haus";
   serviceDnsName = "postgres.service.jort.haus";
   certDir = config.security.acme.certs.${certName}.directory;
+  patroniRebootHook = pkgs.writeShellScriptBin "jorthaus-patroni-reboot-handover" ''
+    set -euo pipefail
+
+    patronictl="''${PATRONICTL:-${pkgs.patroni}/bin/patronictl}"
+    jq=${pkgs.jq}/bin/jq
+    timeout=${pkgs.coreutils}/bin/timeout
+    expected='${builtins.toJSON (map (peer: peer.hostname) postgresHosts)}'
+    config=${lib.escapeShellArg patroniConfigFile}
+    scope=${lib.escapeShellArg patroniScope}
+
+    log() {
+      printf '%s\n' "$*"
+      ${pkgs.util-linux}/bin/logger --tag jorthaus-patroni-reboot -- "$*" || true
+    }
+
+    cluster_snapshot() {
+      "$timeout" --foreground 10s "$patronictl" -c "$config" list --format json "$scope"
+    }
+
+    cluster_healthy() {
+      "$jq" --exit-status --argjson expected "$expected" '
+        length == ($expected | length)
+        and ([.[].Member] | sort) == ($expected | sort)
+        and ([.[] | select(.Role == "Leader" and .State == "running")] | length) == 1
+        and all(.[];
+          (.Role == "Leader" and .State == "running")
+          or ((.Role == "Sync Standby" or .Role == "Replica") and .State == "streaming")
+        )
+      ' >/dev/null
+    }
+
+    if ! snapshot="$(cluster_snapshot)" || ! cluster_healthy <<<"$snapshot"; then
+      log "Patroni cluster is incomplete or unhealthy; aborting the reboot."
+      exit 1
+    fi
+
+    leader="$(printf '%s' "$snapshot" | "$jq" --exit-status --raw-output '[.[] | select(.Role == "Leader" and .State == "running")][0].Member')"
+    if [ "$leader" != ${lib.escapeShellArg host.hostname} ]; then
+      log "This node is not the Patroni leader; no handover is required."
+      exit 0
+    fi
+
+    candidate="$(printf '%s' "$snapshot" | "$jq" --exit-status --raw-output --arg leader "$leader" '
+      [.[] | select(.Member != $leader and .Role == "Sync Standby" and .State == "streaming")]
+      | sort_by(.Member)
+      | .[0].Member
+    ')" || {
+      log "No healthy synchronous standby is available; aborting the reboot."
+      exit 1
+    }
+
+    log "Requesting Patroni switchover from $leader to $candidate."
+    "$timeout" --foreground --kill-after=10s 90s \
+      "$patronictl" -c "$config" switchover --force --leader "$leader" --candidate "$candidate" "$scope"
+
+    for attempt in $(seq 1 24); do
+      if snapshot="$(cluster_snapshot)" \
+        && cluster_healthy <<<"$snapshot" \
+        && printf '%s' "$snapshot" | "$jq" --exit-status --arg candidate "$candidate" '
+          [.[] | select(.Role == "Leader" and .State == "running" and .Member == $candidate)]
+          | length == 1
+        ' >/dev/null; then
+        log "Patroni leader is now $candidate and all members are healthy."
+        exit 0
+      fi
+      sleep 5
+    done
+
+    log "Patroni did not confirm a healthy switchover to $candidate; aborting the reboot."
+    exit 1
+  '';
   tlsDir = "${patroniDataDir}/tls";
   stagedCertFile = "${tlsDir}/fullchain.pem";
   stagedKeyFile = "${tlsDir}/key.pem";
@@ -97,6 +169,14 @@ in
       jorthaus.prometheus.localSystemdServices = [
         "patroni.service"
         "prometheus-postgres-exporter.service"
+      ];
+      jorthaus.gracefulReboot.hooks = [
+        {
+          name = "patroni-handover";
+          order = 100;
+          timeoutSeconds = 180;
+          command = patroniRebootHook;
+        }
       ];
       assertions = [
         {
