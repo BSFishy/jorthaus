@@ -133,6 +133,26 @@ let
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList renderUser cfg.users)}
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList renderDatabase cfg.databases)}
   '';
+
+  collationMaintenanceScript = pkgs.writeShellApplication {
+    name = "jorthaus-postgres-collation-maintenance";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.jq
+      pkgs.postgresql
+      pkgs.util-linux
+    ];
+    text = ''
+      unset BASH_ENV ENV PSQL_BIN JORT_POSTGRES_HOST JORT_POSTGRES_PORT JORT_POSTGRES_USER
+      unset JORT_POSTGRES_COLLATION_AUDIT_FILE JORT_POSTGRES_COLLATION_LOCK_FILE
+      unset PGHOST PGHOSTADDR PGPORT PGUSER PGDATABASE PGSERVICE PGSERVICEFILE PGPASSFILE
+      unset PGSSLMODE PGSSLROOTCERT PGSSLCERT PGSSLKEY PGSSLCRL PGOPTIONS PGAPPNAME
+      unset PGCONNECT_TIMEOUT PGCHANNELBINDING PGCLIENTENCODING PGTARGETSESSIONATTRS
+      PGPASSWORD="$(tr -d '\r\n' < ${config.age.secrets.patroni-postgres-superuser-password.path})"
+      export PGPASSWORD
+      exec ${pkgs.bash}/bin/bash ${../../../../scripts/postgres-collation-maintenance.sh} "$@"
+    '';
+  };
 in
 {
   options.jorthaus.postgres.ensure = {
@@ -243,7 +263,8 @@ in
   };
 
   config = lib.mkIf enabled {
-    environment.systemPackages = [ ensureScript ];
+    environment.systemPackages = [ ensureScript ]
+      ++ lib.optionals (bootstrapHost != null && host.hostname == bootstrapHost.hostname) [ collationMaintenanceScript ];
 
     systemd.services.jorthaus-postgres-ensure =
       lib.mkIf (bootstrapHost != null && host.hostname == bootstrapHost.hostname)

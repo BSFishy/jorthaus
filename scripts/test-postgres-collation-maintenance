@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+test_dir=$(mktemp -d)
+trap 'rm -rf -- "$test_dir"' EXIT
+
+fake_psql="$test_dir/psql"
+plan_file="$test_dir/inventory.json"
+sessions_file="$test_dir/sessions.json"
+trace_file="$test_dir/trace"
+
+generate_fixture() {
+  cat >"$plan_file" <<'JSON'
+{
+  "database":"postgres",
+  "allow_connections":true,
+  "recorded_version":"2.42",
+  "actual_version":"2.44",
+  "default_mismatch":true,
+  "database_size_bytes":8060928,
+  "index_count":163,
+  "index_size_bytes":3340288,
+  "collations":[
+    {
+      "identifier":"\"pg_catalog\".\"en_US\"",
+      "schema":"pg_catalog",
+      "name":"en_US",
+      "provider":"c",
+      "recorded_version":"2.42",
+      "actual_version":"2.44"
+    }
+  ]
+}
+JSON
+}
+
+cat >"$fake_psql" <<'FAKE_PSQL'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+sql=
+while (($#)); do
+  case "$1" in
+    --command=*) sql=${1#*=} ;;
+    --command|-c)
+      shift
+      sql=$1
+      ;;
+  esac
+  shift
+done
+
+case "$sql" in
+  *pg_is_in_recovery*)
+    printf '%s\n' "${FAKE_PRIMARY:-t}"
+    ;;
+  *inet_server_addr*)
+    printf '%s\n' '127.0.0.1:5432 started=2026-11-08 00:00:00+00 PostgreSQL 18'
+    ;;
+  *pg_stat_activity*)
+    printf '%s\n' "$(<"$FAKE_SESSIONS_FILE")"
+    ;;
+  *NOT\ datallowconn*)
+    printf '[]\n'
+    ;;
+  *json_agg\(datname*)
+    printf '["postgres"]\n'
+    ;;
+  *pg_collation*)
+    printf '%s\n' "$(<"$FAKE_PLAN_FILE")"
+    ;;
+  REINDEX\ DATABASE\ *)
+    printf 'REINDEX:%s\n' "$sql" >>"$FAKE_TRACE_FILE"
+    ;;
+  ALTER\ COLLATION\ *)
+    printf 'COLLATION:%s\n' "$sql" >>"$FAKE_TRACE_FILE"
+    jq '.collations = []' "$FAKE_PLAN_FILE" >"$FAKE_PLAN_FILE.next"
+    mv "$FAKE_PLAN_FILE.next" "$FAKE_PLAN_FILE"
+    ;;
+  ALTER\ DATABASE\ *)
+    printf 'DATABASE:%s\n' "$sql" >>"$FAKE_TRACE_FILE"
+    jq '.default_mismatch = false | .recorded_version = .actual_version' "$FAKE_PLAN_FILE" >"$FAKE_PLAN_FILE.next"
+    mv "$FAKE_PLAN_FILE.next" "$FAKE_PLAN_FILE"
+    ;;
+  *)
+    printf 'unexpected SQL: %s\n' "$sql" >&2
+    exit 1
+    ;;
+esac
+FAKE_PSQL
+chmod 0755 "$fake_psql"
+
+generate_fixture
+printf '[]\n' >"$sessions_file"
+: >"$trace_file"
+
+run_maintenance() {
+  env \
+    PGPASSWORD=test-only \
+    PSQL_BIN="$fake_psql" \
+    FAKE_PLAN_FILE="$plan_file" \
+    FAKE_SESSIONS_FILE="$sessions_file" \
+    FAKE_TRACE_FILE="$trace_file" \
+    FAKE_PRIMARY="${FAKE_PRIMARY:-t}" \
+    JORT_POSTGRES_COLLATION_AUDIT_FILE="$test_dir/audit.log" \
+    JORT_POSTGRES_COLLATION_LOCK_FILE="$test_dir/maintenance.lock" \
+    bash "$script_dir/postgres-collation-maintenance.sh" "$@"
+}
+
+run_maintenance plan >/dev/null
+test ! -s "$trace_file"
+
+if run_maintenance execute >/dev/null 2>&1; then
+  echo 'execute unexpectedly accepted missing safeguards' >&2
+  exit 1
+fi
+test ! -s "$trace_file"
+
+if FAKE_PRIMARY=f run_maintenance plan >/dev/null 2>&1; then
+  echo 'plan unexpectedly accepted a read-only replica' >&2
+  exit 1
+fi
+test ! -s "$trace_file"
+
+run_maintenance execute \
+  --database postgres \
+  --backup-ref base_test_2026 \
+  --writers-quiesced \
+  --confirm REINDEX-AND-REFRESH-POSTGRES-COLLATIONS >/dev/null
+
+expected_trace=$(printf '%s\n' \
+  'REINDEX:REINDEX DATABASE "postgres";' \
+  'COLLATION:ALTER COLLATION "pg_catalog"."en_US" REFRESH VERSION;' \
+  'DATABASE:ALTER DATABASE "postgres" REFRESH COLLATION VERSION;')
+test "$(<"$trace_file")" = "$expected_trace"
+remaining=$(jq '(.default_mismatch == true) or (.collations | length > 0)' "$plan_file")
+test "$remaining" = false
+
+generate_fixture
+echo '[{"database":"postgres","role":"app","application":"agency","state":"active","transaction_started":"2026-11-08T00:00:00Z"}]' >"$sessions_file"
+: >"$trace_file"
+if run_maintenance execute \
+  --database postgres \
+  --backup-ref base_test_2026 \
+  --writers-quiesced \
+  --confirm REINDEX-AND-REFRESH-POSTGRES-COLLATIONS >/dev/null 2>&1; then
+  echo 'execute unexpectedly proceeded with active client work' >&2
+  exit 1
+fi
+test ! -s "$trace_file"
+
+echo 'PostgreSQL collation maintenance script tests passed.'

@@ -419,6 +419,8 @@ in
             connectionLimit = 5;
           };
 
+          agency.login = false;
+
           oneuptime.login = false;
           oneuptime_app = {
             login = true;
@@ -444,6 +446,15 @@ in
         };
 
         databases = {
+          agency = {
+            owner = "agency";
+            schemas.public = {
+              owner = "agency";
+              grantAllTo = [ "agency" ];
+              defaultPrivilegesFor = [ "agency" ];
+            };
+          };
+
           authentik = {
             owner = "authentik";
             schemas.public = {

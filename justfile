@@ -110,6 +110,24 @@ create-seaweedfs-postgres-secret:
 postgres-ensure:
   ssh matt@gaia-01.node.jort.haus sudo systemctl start jorthaus-postgres-ensure.service
 
+# Show databases with default or individual collation version mismatches.
+[group('postgres')]
+postgres-collation-plan:
+  ssh matt@gaia-01.node.jort.haus sudo jorthaus-postgres-collation-maintenance plan
+
+# Reindex one selected database and refresh its outdated collation versions.
+[script]
+[group('postgres')]
+postgres-collation-refresh database backup_ref confirmation:
+  set -euo pipefail
+  [[ '{{confirmation}}' == 'REINDEX-AND-REFRESH-POSTGRES-COLLATIONS' ]] || { echo 'Supply the exact collation maintenance confirmation phrase.' >&2; exit 2; }
+  [[ '{{backup_ref}}' =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo 'Supply the verified WAL-G backup reference.' >&2; exit 2; }
+  ssh matt@gaia-01.node.jort.haus sudo jorthaus-postgres-collation-maintenance execute \
+    --database '{{database}}' \
+    --backup-ref '{{backup_ref}}' \
+    --writers-quiesced \
+    --confirm '{{confirmation}}'
+
 [script]
 [group('valkey')]
 oneuptime-valkey-user-bootstrap host confirmation='':
