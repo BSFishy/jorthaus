@@ -59,3 +59,30 @@ resource "vault_kubernetes_auth_backend_role" "agency_postgres_credentials" {
   token_ttl               = 3600
   token_max_ttl           = 3600
 }
+
+resource "vault_policy" "agency_postgres_migrations_auth" {
+  name = "agency-postgres-migrations-auth"
+
+  policy = <<-EOT
+    path "auth/token/lookup-self" {
+      capabilities = ["read"]
+    }
+  EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "agency_postgres_migrations" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "agency-postgres-migrations"
+  bound_service_account_names      = ["agency-external-secrets"]
+  bound_service_account_namespaces = ["agency"]
+  audience                         = "vault"
+  token_policies = [
+    vault_policy.agency_postgres_credentials.name,
+    vault_policy.agency_postgres_migrations_auth.name,
+  ]
+
+  token_no_default_policy = true
+  token_type              = "service"
+  token_ttl               = 3600
+  token_max_ttl           = 3600
+}
